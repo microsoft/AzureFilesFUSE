@@ -1,0 +1,5 @@
+azure~=2.0.0
+ptvsd
+fusepy
+requests
+python-dateutil
