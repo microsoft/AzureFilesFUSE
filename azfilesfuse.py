@@ -36,21 +36,6 @@ if platform.system() is not 'Windows':
     syslog_handler.setFormatter(formatter)
     logger.addHandler(syslog_handler)
 
-class ItemType:
-    Unknown = ''
-    Directory = 'directory'
-    File = 'file'
-    Notebook = 'notebook'
-
-class Headers:
-    XItemType = 'X-Item-Type'
-    XItemModified = 'X-Item-Modified'
-    XItemCreated = 'X-Item-Created'
-    XItemRename = 'X-Item-Rename'
-    XAuthToken = 'X-AuthToken'
-    XFileAction = 'X-File-Action'
-    XCheckpointName = 'X-Checkpoint-Name'
-
 class AzureFiles(LoggingMixIn, Operations):
 
     fds = dict()  # <fd, (path, bytes, dirty)>
@@ -91,13 +76,14 @@ class AzureFiles(LoggingMixIn, Operations):
         create a file at the specified path with specific access mode (chmod)
         TODO: respect Mode
         '''
+        path = path.lstrip('/')
         logger.debug("create operation begin: path:{!r} mode:{}".format(path, mode))
         try:
             if not path:
                 raise FuseOSError(errno.EINVAL)
 
             directory, filename = self._get_separated_path(path)
-            self._files_service.create(self._azure_file_share_name, directory, filename, 0)
+            self._files_service.create_file(self._azure_file_share_name, directory, filename, 0)
 
             fd = self._get_next_fd()
             self.fds[fd] = self.File(path, None, False)
@@ -174,8 +160,8 @@ class AzureFiles(LoggingMixIn, Operations):
         except Exception as e:
             logger.exception(
                 "getattr operation exception: path:{!r} fh:{} exception:{}".format(path, fh, e))
-            raise e
-   
+            raise FuseOSError(ENOENT)   
+
     def mkdir(self, path, mode):
         '''
         creates directory at path with specific mode
@@ -243,8 +229,8 @@ class AzureFiles(LoggingMixIn, Operations):
         '''
         returns a directory listing for this directory
         '''
-        if path == '/':
-            path = ''
+        path = path.lstrip('/')
+
         logger.debug("readdir operation begin: path:{!r} fh:{}".format(path, fh))
         try:
             directory_listing = self._files_service.list_directories_and_files(
