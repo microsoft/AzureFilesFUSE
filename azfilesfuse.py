@@ -188,14 +188,14 @@ class AzureFiles(LoggingMixIn, Operations):
             path = path.lstrip('/')
             directory, filename = self._get_separated_path(path)
 
-            data = self._files_service.get_file_to_bytes(self._azure_file_share_name, directory, filename)
+            data = self._files_service.get_file_to_bytes(self._azure_file_share_name, directory, filename).content
 
             fd = self._get_next_fd()
             self.fds[fd] = self.File(path, data, False)
             logger.debug("open operation end: path:{!r} flags:{} len(data):{} return-fd:{}".format(path, flags, len(data), fd))
             return fd
         except Exception as e:
-            logger.exception("open operation exception: path:{!r} flags:{} status code:{} exception:{}".format(path, flags, e))
+            logger.exception("open operation exception: path:{!r} flags:{} exception:{}".format(path, flags, e))
             raise FuseOSError(ENOENT)
 
     def read(self, path, size, offset, fh):
