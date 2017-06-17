@@ -47,7 +47,7 @@ class AzureFiles(LoggingMixIn, Operations):
     _backend_dir_support = None
 
     '''
-    A FUSE File Sytem for Azure Notebooks communicating through the Azure Notebooks Storage REST Service
+    A FUSE File Sytem for using Azure Files with a SAS token for connecting
     '''
     def __init__(self, azure_storage_account_name, azure_file_share_name, sas_token):
         LoggingMixIn.log.addHandler(console_handler)
@@ -74,7 +74,7 @@ class AzureFiles(LoggingMixIn, Operations):
     def create(self, path, mode):
         '''
         create a file at the specified path with specific access mode (chmod)
-        TODO: respect Mode
+        TODO: Mode is not respected at this time. Support could be added
         '''
         path = path.lstrip('/')
         logger.debug("create operation begin: path:{!r} mode:{}".format(path, mode))
@@ -122,7 +122,6 @@ class AzureFiles(LoggingMixIn, Operations):
                 return st
             
             try:
-                print('filename:{} directory:{}'.format(filename, directory))
                 properties = self._files_service.get_file_properties(
                     self._azure_file_share_name, directory, filename).properties
                 item_type = 'file'
@@ -158,6 +157,7 @@ class AzureFiles(LoggingMixIn, Operations):
             logger.debug("getattr operation end: path:{!r} fh:{} return:{}".format(path, fh, st))
             return st
         except Exception as e:
+            # This log is noisy as it occurs if the file isn't found. Only uncomment for debugging.
             #logger.exception(
             #    "getattr operation exception: path:{!r} fh:{} exception:{}".format(path, fh, e))
             raise FuseOSError(ENOENT)   
@@ -165,9 +165,8 @@ class AzureFiles(LoggingMixIn, Operations):
     def mkdir(self, path, mode):
         '''
         creates directory at path with specific mode
-        TODO: mode doesn't do anything. It is ignored currently
+        TODO: Mode is not respected at this time. Support could be added
         '''
-        """create a directory"""
         path = path.lstrip('/')
         logger.debug("mkdir operation begin: path:{!r} mode:{}".format(path, mode))
         try:
@@ -249,9 +248,8 @@ class AzureFiles(LoggingMixIn, Operations):
 
     def rename(self, old, new):
         """
-        TODO: does this need to handle directories? if so, this needs that still.
-
-        Rename a file.
+        Rename a file or directory.
+        TODO: Currently this implementation does not support renaming directories. Support needed.
         """
         logger.debug("rename operation begin: old:{} new:{}".format(old, new))
         try:
@@ -284,7 +282,7 @@ class AzureFiles(LoggingMixIn, Operations):
 
             path = path.strip('/')
             self._files_service.delete_directory(self._azure_file_share_name, path)
-            
+
             # TODO: we may want to handle not found, not empty, not allowed.
             # # check response code to see if we should return a more specific error
             # if response.status_code == requests.codes.not_found:
@@ -308,10 +306,8 @@ class AzureFiles(LoggingMixIn, Operations):
         logger.debug("unlink operation begin: path:{!r}".format(path))
         try:
             path = path.strip('/')
-            # verify this is a file
             directory, filename = self._get_separated_path(path)
             self._files_service.delete_file(self._azure_file_share_name, directory, filename)
-
             logger.debug("unlink operation end: path:{!r}".format(path))
             return 0
         except Exception as e:
@@ -447,11 +443,11 @@ class AzureFiles(LoggingMixIn, Operations):
 if __name__ == '__main__':
     import syslog
     try:
-        logger.info("Starting AzureFiles Fuse Driver")
+        logger.info("Starting Azure Files Fuse Driver")
         if len(argv) == 2:
             # read file in from disk as specified, then pipe them into the arg list for below
             scriptargsfile = argv[1]
-            logger.info("Starting AzureFiles Fuse Driver using args file:{}".format(scriptargsfile))
+            logger.info("Starting Azure Files Fuse Driver using args file:{}".format(scriptargsfile))
             with open(scriptargsfile) as f:
                 argsFromFile = f.readline().rstrip()
                 splitArgs = argsFromFile.split(' ')
@@ -463,8 +459,7 @@ if __name__ == '__main__':
                 logger.error("Failed to remove fuseArgs file:{}".format(e))
 
         if len(argv) != 5:
-            print('usage: {} <azure_storage_account> <azure_file_share_name> <sas_token> <mount_point>'.format(argv[0]))
-            print('''TODO ADD HELP''')
+            print('usage: {} <azure_storage_account_name> <azure_file_share_name> <sas_token> <mount_point>'.format(argv[0]))
             syslog.syslog(syslog.LOG_ERR, "Arguments to Python Fuse Driver Bad: {}".format(argv))
             exit(1)
 
