@@ -158,8 +158,8 @@ class AzureFiles(LoggingMixIn, Operations):
             logger.debug("getattr operation end: path:{!r} fh:{} return:{}".format(path, fh, st))
             return st
         except Exception as e:
-            logger.exception(
-                "getattr operation exception: path:{!r} fh:{} exception:{}".format(path, fh, e))
+            #logger.exception(
+            #    "getattr operation exception: path:{!r} fh:{} exception:{}".format(path, fh, e))
             raise FuseOSError(ENOENT)   
 
     def mkdir(self, path, mode):
@@ -168,6 +168,7 @@ class AzureFiles(LoggingMixIn, Operations):
         TODO: mode doesn't do anything. It is ignored currently
         '''
         """create a directory"""
+        path = path.lstrip('/')
         logger.debug("mkdir operation begin: path:{!r} mode:{}".format(path, mode))
         try:
             self._files_service.create_directory(
@@ -280,9 +281,6 @@ class AzureFiles(LoggingMixIn, Operations):
         '''
         logger.debug("rmdir operation begin: path:{!r}".format(path))
         try:
-            # If the backend doesn't support directories?
-            if not self.directories_supported():
-                raise FuseOSError(errno.ENOTSUP)
 
             path = path.strip('/')
             self._files_service.delete_directory(self._azure_file_share_name, path)
@@ -312,8 +310,7 @@ class AzureFiles(LoggingMixIn, Operations):
             path = path.strip('/')
             # verify this is a file
             directory, filename = self._get_separated_path(path)
-
-            self._files_service.delete_file(self._azure_file_share_name, directory, file_name)
+            self._files_service.delete_file(self._azure_file_share_name, directory, filename)
 
             logger.debug("unlink operation end: path:{!r}".format(path))
             return 0
@@ -477,3 +474,4 @@ if __name__ == '__main__':
     except Exception as e:
         logger.error("Python Fuse Top-Level Exception: {}".format(e))
         logger.error("Python Fuse Top-Level Trace Exception: {}".format(traceback.format_exc()))
+
