@@ -18,6 +18,8 @@ import traceback
 from collections import defaultdict, namedtuple
 from time import time
 import azure.storage.file as file
+from azure.common import AzureMissingResourceHttpError
+
 import platform
 import urllib.parse
 #import ptvsd
@@ -69,6 +71,20 @@ class AzureFiles(LoggingMixIn, Operations):
 
     def _get_separated_path(self, path):
         return (os.path.dirname(path), os.path.basename(path))
+
+    def _discover_item_type(self, item_path):
+        try:
+            self._files_service.get_directory_metadata(self._azure_file_share_name, item_path)
+            return 'directory'
+        except AzureMissingResourceHttpError:
+            try:
+                # if this fails, it is likely a file. Let's try for a file.
+                path_dir, path_file = self._get_separated_path(item_path)
+                self._files_service.get_file_metadata(self._azure_file_share_name, path_dir, path_file)
+                return 'file'
+            except AzureMissingResourceHttpError:
+                # if that also fails, we must have a not found.
+                raise FuseOSError(errno.ENOENT)
 
     # FUSE Methods
     def create(self, path, mode):
@@ -182,6 +198,7 @@ class AzureFiles(LoggingMixIn, Operations):
     def open(self, path, flags=0):
         '''
         Open a file and return the fd to that file. 
+        TODO: flags are not respected. Support could be added.
         '''
         logger.debug("open operation begin: path:{!r} flags:{}".format(path, flags))
         try:
@@ -257,21 +274,45 @@ class AzureFiles(LoggingMixIn, Operations):
             new_path = new.strip('/')
 
             if new_path == old_path:
-                raise FuseOSError(errno.EALREADY) # file exists at path. Would cause name collision
+                # file exists at path. Would cause name collision
+                raise FuseOSError(errno.EALREADY)
 
-            old_path_dir, old_path_file = self._get_separated_path(old_path)
-            new_path_dir, new_path_file = self._get_separated_path(new_path)
-
-            file_contents = self._files_service.get_file_to_bytes(self._azure_file_share_name, old_path_dir, old_path_file)
-            self._files_service.create_file_from_bytes(self._azure_file_share_name, new_path_dir, new_path_file, file_contents)
-            self._files_service.delete_file(self._azure_file_share_name, old_path_dir, old_path_file)
-
+            self._rename(old_path, new_path, self._discover_item_type(old_path))
             logger.debug("rename operation end: old:{} new:{}".format(old, new))
             return 0
         except Exception as e:
             logger.exception(
                 "rename operation exception: old:{} new:{} exception:{}".format(old, new, e))
             raise e
+
+    def _rename(self, old_location, new_location, item_type):
+        logger.info('_rename - old:{} new:{} type:{}'.format(old_location, new_location, item_type))
+        old_location = old_location.strip('/')
+        new_location = new_location.strip('/')
+        if item_type == 'directory':
+            self._files_service.create_directory(self._azure_file_share_name, new_location)
+            # we need to recurse for each object in the directory
+            for i in self._files_service.list_directories_and_files(self._azure_file_share_name, old_location):
+                old_path = os.path.join(old_location, i.name)
+                new_path = os.path.join(new_location, i.name)
+                if type(i) is file.models.File:
+                    self._rename(old_path, new_path, 'file')
+                elif type(i) is file.models.Directory:
+                    self._rename(old_path, new_path, 'directory')
+                else:
+                    raise ValueError("item_type must be directory or file. unexpected type: {}".format(type(i)))
+            self._files_service.delete_directory(self._azure_file_share_name, old_location)
+        elif item_type =='file':
+            # rename this object.
+            old_path_dir, old_path_file = self._get_separated_path(old_location)
+            new_path_dir, new_path_file = self._get_separated_path(new_location)
+
+            file_contents = self._files_service.get_file_to_bytes(self._azure_file_share_name, old_path_dir, old_path_file).content
+            self._files_service.create_file_from_bytes(self._azure_file_share_name, new_path_dir, new_path_file, file_contents)
+
+            self._files_service.delete_file(self._azure_file_share_name, old_path_dir, old_path_file)
+        else:
+            raise ValueError("item_type must be 'file' or 'directory'")
 
     def rmdir(self, path):
         '''
