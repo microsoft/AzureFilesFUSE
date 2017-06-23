@@ -25,11 +25,12 @@ import urllib.parse
 #import ptvsd
 #ptvsd.enable_attach(secret='my_secret')
 
+LOGGING_LEVEL=logging.INFO
 console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
 
 logger = logging.getLogger("AzureFiles_FuseDriver")
-logger.setLevel(logging.DEBUG)
+logger.setLevel(LOGGING_LEVEL)
 logger.addHandler(console_handler)
 
 if platform.system() is not 'Windows':
@@ -91,7 +92,7 @@ class AzureFiles(LoggingMixIn, Operations):
         TODO: Mode is not respected at this time. Support could be added
         '''
         path = path.lstrip('/')
-        logger.debug("create operation begin: path:{!r} mode:{}".format(path, mode))
+        logger.info("create operation begin: path:{!r} mode:{}".format(path, mode))
         try:
             if not path:
                 raise FuseOSError(errno.EINVAL)
@@ -119,7 +120,7 @@ class AzureFiles(LoggingMixIn, Operations):
         st_uid;    /* user-id of owner */
         st_gid;    /* group-id of owner */
         '''
-        logger.debug("getattr operation begin: path:{!r} fh:{}".format(path, fh))
+        logger.info("getattr operation begin: path:{!r} fh:{}".format(path, fh))
         try:
             path = path.lstrip('/')
             logger.debug('getattr request: {}'.format(path))
@@ -182,7 +183,7 @@ class AzureFiles(LoggingMixIn, Operations):
         TODO: Mode is not respected at this time. Support could be added
         '''
         path = path.lstrip('/')
-        logger.debug("mkdir operation begin: path:{!r} mode:{}".format(path, mode))
+        logger.info("mkdir operation begin: path:{!r} mode:{}".format(path, mode))
         try:
             self._files_service.create_directory(
                 self._azure_file_share_name, path, fail_on_exist=True)
@@ -198,7 +199,7 @@ class AzureFiles(LoggingMixIn, Operations):
         Open a file and return the fd to that file. 
         TODO: flags are not respected. Support could be added.
         '''
-        logger.debug("open operation begin: path:{!r} flags:{}".format(path, flags))
+        logger.info("open operation begin: path:{!r} flags:{}".format(path, flags))
         try:
             path = path.lstrip('/')
             directory, filename = self._get_separated_path(path)
@@ -217,7 +218,7 @@ class AzureFiles(LoggingMixIn, Operations):
         '''
         read a file and return a buffer containing that area of the file
         '''
-        logger.debug("read operation begin: path:{!r} size:{} offset:{} fh:{}".format(path, size, offset, fh))
+        logger.info("read operation begin: path:{!r} size:{} offset:{} fh:{}".format(path, size, offset, fh))
         try:
             if not fh or fh not in self.fds:
                 logger.debug("read operation missing fh from fds: fh:{} fds:{}".format(fh, self.fds))
@@ -246,7 +247,7 @@ class AzureFiles(LoggingMixIn, Operations):
         '''
         path = path.lstrip('/')
 
-        logger.debug("readdir operation begin: path:{!r} fh:{}".format(path, fh))
+        logger.info("readdir operation begin: path:{!r} fh:{}".format(path, fh))
         try:
             directory_listing = self._files_service.list_directories_and_files(
                 self._azure_file_share_name, path)
@@ -266,7 +267,7 @@ class AzureFiles(LoggingMixIn, Operations):
         Rename a file or directory.
         TODO: Currently this implementation does not support renaming directories. Support needed.
         """
-        logger.debug("rename operation begin: old:{} new:{}".format(old, new))
+        logger.info("rename operation begin: old:{} new:{}".format(old, new))
         try:
             old_path = old.strip('/')
             new_path = new.strip('/')
@@ -284,7 +285,7 @@ class AzureFiles(LoggingMixIn, Operations):
             raise e
 
     def _rename(self, old_location, new_location, item_type):
-        logger.info('_rename - old:{} new:{} type:{}'.format(old_location, new_location, item_type))
+        logger.debug('_rename - old:{} new:{} type:{}'.format(old_location, new_location, item_type))
         old_location = old_location.strip('/')
         new_location = new_location.strip('/')
         if item_type == 'directory':
@@ -316,7 +317,7 @@ class AzureFiles(LoggingMixIn, Operations):
         '''
         removes a directory at specified path
         '''
-        logger.debug("rmdir operation begin: path:{!r}".format(path))
+        logger.info("rmdir operation begin: path:{!r}".format(path))
         try:
 
             path = path.strip('/')
@@ -342,7 +343,7 @@ class AzureFiles(LoggingMixIn, Operations):
         '''
         Delete file.
         '''
-        logger.debug("unlink operation begin: path:{!r}".format(path))
+        logger.info("unlink operation begin: path:{!r}".format(path))
         try:
             path = path.strip('/')
             directory, filename = self._get_separated_path(path)
@@ -357,7 +358,7 @@ class AzureFiles(LoggingMixIn, Operations):
         '''
         write
         '''
-        logger.debug("write operation begin: path:{!r} len(data):{} offset:{} fh:{}".format(path, len(data), offset, fh))
+        logger.info("write operation begin: path:{!r} len(data):{} offset:{} fh:{}".format(path, len(data), offset, fh))
         try:
             if not fh or fh not in self.fds:
                 logger.debug("write operation fh not in fds list.: path:{!r} len(data):{} offset:{} fh:{}".format(path, len(data), offset, fh))
@@ -439,7 +440,7 @@ class AzureFiles(LoggingMixIn, Operations):
         because recreating a file will first truncate it.
         '''
         file_opened = False
-        logger.debug("truncate operation begin: path:{!r} length:{} fh:{}".format(path, length, fh))
+        logger.info("truncate operation begin: path:{!r} length:{} fh:{}".format(path, length, fh))
         # length must be positive
         if length < 0:
             raise FuseOSError(errno.EINVAL)
@@ -472,7 +473,7 @@ class AzureFiles(LoggingMixIn, Operations):
         '''
         release
         '''
-        logger.debug("release operation begin: path:{!r} fh:{}".format(path, fh))
+        logger.info("release operation begin: path:{!r} fh:{}".format(path, fh))
         try:
             if fh is not None and fh in self.fds:
                 # ensure this is flushed before closing file handlers
@@ -490,6 +491,7 @@ class AzureFiles(LoggingMixIn, Operations):
         chmod. This command is a NOP right now. 
         If it is missing this is interpreted as a read-only file system though.
         '''
+        logger.info("chmod operation: path:{!r} mode:{}".format(path, mode))
         return
         
     def chown(self, path, uid, gid):
@@ -497,6 +499,7 @@ class AzureFiles(LoggingMixIn, Operations):
         chown. This command is a NOP right now.
         If it is missing this is interpreted as a read-only file system though.
         '''
+        logger.info("chown operation: path:{!r} uid:{} gid:{}".format(path, uid, gid))
         return
         
 if __name__ == '__main__':
@@ -523,7 +526,7 @@ if __name__ == '__main__':
             exit(1)
 
         syslog.syslog("fuse = FUSE(AzureFiles({}, {}, {}), {}, foreground=True, nothreads=True)".format(argv[1], argv[2], argv[3], argv[4]))
-        logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(level=LOGGING_LEVEL)
         fuse = FUSE(AzureFiles(argv[1], argv[2], argv[3]), argv[4], foreground=True, nothreads=True, debug=False)
     except Exception as e:
         logger.error("Python Fuse Top-Level Exception: {}".format(e))
