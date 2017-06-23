@@ -46,8 +46,6 @@ class AzureFiles(LoggingMixIn, Operations):
 
     File = namedtuple("File", ["path", "bytes", "dirty"], verbose=False, rename=False)
 
-    _backend_dir_support = None
-
     '''
     A FUSE File Sytem for using Azure Files with a SAS token for connecting
     '''
