@@ -372,11 +372,7 @@ class AzureFiles(LoggingMixIn, Operations):
                     raise FuseOSError(errno.EINVAL)
                 # write the data at the range adding old data to the front and back of it.
                 self.fds[fh] = self.File(self.fds[fh].path, d[:offset] + data + d[offset+len(data):], True)
-                # flush each time. to undo this, we need to make sure that getattr
-                # reports the file on disk, not on the server. was seeing issues due
-                # to a file being echo'd to, written, and not reporting the length
-                # after the write.
-                self.flush(path,fh)
+                # NOTE: An issue used to exist where if flush wasn't called here, file lengths were reported incorrectly.
                 data_length = len(data)
 
                 # TODO: if we ever try to cache attrs, we would have to update the st_mtime.
