@@ -478,7 +478,21 @@ class AzureFiles(LoggingMixIn, Operations):
         except Exception as e:
             logger.exception("release operation exception: path:{!r} fh:{} exception:{}".format(path, fh, e))
             raise e
-
+    
+    def chmod(self, path, mode):
+        '''
+        chmod. This command is a NOP right now. 
+        If it is missing this is interpreted as a read-only file system though.
+        '''
+        return
+        
+    def chown(self, path, uid, gid):
+        '''
+        chown. This command is a NOP right now.
+        If it is missing this is interpreted as a read-only file system though.
+        '''
+        return
+        
 if __name__ == '__main__':
     import syslog
     try:
