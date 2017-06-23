@@ -371,9 +371,18 @@ class AzureFiles(LoggingMixIn, Operations):
                     logger.debug("write operation offset negative or exceeds file length: path:{!r} len(data):{} offset:{} fh:{}".format(path, len(data), offset, fh))
                     raise FuseOSError(errno.EINVAL)
                 # write the data at the range adding old data to the front and back of it.
-                self.fds[fh] = self.File(self.fds[fh].path, d[:offset] + data + d[offset+len(data):], True)
-                # NOTE: An issue used to exist where if flush wasn't called here, file lengths were reported incorrectly.
+                new_data = d[:offset] + data + d[offset+len(data):]
+                self.fds[fh] = self.File(self.fds[fh].path, new_data, True)
+                path = path.lstrip('/')
+                directory, filename = self._get_separated_path(path)
                 data_length = len(data)
+
+                # TODO: Consider not calling this each time.
+                # in case the size is smaller than the original or larger than the original
+                self._files_service.resize_file(self._azure_file_share_name, directory, filename, len(new_data))
+
+                # update the range specified by this right.
+                self._files_service.update_range(self._azure_file_share_name, directory, filename, data, start_range=offset, end_range=offset+len(data)-1)
 
                 # TODO: if we ever try to cache attrs, we would have to update the st_mtime.
 
@@ -383,7 +392,7 @@ class AzureFiles(LoggingMixIn, Operations):
             logger.exception("write operation exception: path:{!r} len(data):{} offset:{} fh:{} exception:{}".format(path, len(data), offset, fh, e))
             raise e
 
-    def flush(self, path, fh=None):
+    def _flush(self, path, fh=None):
         '''
         flush
         '''
@@ -449,7 +458,8 @@ class AzureFiles(LoggingMixIn, Operations):
             # alter the file
             self.fds[fh] = self.File(self.fds[fh].path, data[:length], True)
 
-            self.flush(path, fh)
+            self._flush(path, fh)
+
         except Exception as e:
             logger.exception("truncate operation exception: path:{!r} length:{} fh:{} e:{}".format(path, length, fh, e))
             raise e
@@ -466,7 +476,7 @@ class AzureFiles(LoggingMixIn, Operations):
         try:
             if fh is not None and fh in self.fds:
                 # ensure this is flushed before closing file handlers
-                self.flush(path, fh)
+                self._flush(path, fh)
                 del self.fds[fh]
                 # add to freedlist
                 self._freed_fd_list.append(fh)
