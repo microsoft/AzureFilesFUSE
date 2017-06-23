@@ -517,8 +517,8 @@ if __name__ == '__main__':
             exit(1)
 
         syslog.syslog("fuse = FUSE(AzureFiles({}, {}, {}), {}, foreground=True, nothreads=True)".format(argv[1], argv[2], argv[3], argv[4]))
-        logging.basicConfig(level=logging.DEBUG)
-        fuse = FUSE(AzureFiles(argv[1], argv[2], argv[3]), argv[4], foreground=True, nothreads=True, debug=True)
+        logging.basicConfig(level=logging.INFO)
+        fuse = FUSE(AzureFiles(argv[1], argv[2], argv[3]), argv[4], foreground=True, nothreads=True, debug=False)
     except Exception as e:
         logger.error("Python Fuse Top-Level Exception: {}".format(e))
         logger.error("Python Fuse Top-Level Trace Exception: {}".format(traceback.format_exc()))
