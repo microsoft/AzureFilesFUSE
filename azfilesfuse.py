@@ -18,7 +18,7 @@ import traceback
 from collections import defaultdict, namedtuple
 from time import time
 import azure.storage.file as file
-from azure.common import AzureMissingResourceHttpError
+from azure.common import AzureMissingResourceHttpError, AzureConflictHttpError
 
 import platform
 import urllib.parse
@@ -41,11 +41,10 @@ if platform.system() is not 'Windows':
 
 class AzureFiles(LoggingMixIn, Operations):
 
-    fds = dict()  # <fd, (path, bytes, dirty)>
-    _fd = 0
-    _freed_fd_list = []
+    #_fd = 0
+    #_freed_fd_list = []
 
-    File = namedtuple("File", ["path", "bytes", "dirty"], verbose=False, rename=False)
+    #File = namedtuple("File", ["path", "bytes", "dirty"], verbose=False, rename=False)
 
     '''
     A FUSE File Sytem for using Azure Files with a SAS token for connecting
@@ -59,16 +58,8 @@ class AzureFiles(LoggingMixIn, Operations):
         self._sas_token = sas_token
         self._files_service = file.FileService(self._azure_storage_account_name, sas_token=self._sas_token)
 
-    def _get_next_fd(self):
-        # use a freed fd if available
-        if self._freed_fd_list:
-            next_fd = self._freed_fd_list.pop()
-            return next_fd
-        else:
-            self._fd += 1
-            return self._fd
-
     def _get_separated_path(self, path):
+        path = path.lstrip('/')
         return (os.path.dirname(path), os.path.basename(path))
 
     def _discover_item_type(self, item_path):
@@ -100,10 +91,8 @@ class AzureFiles(LoggingMixIn, Operations):
             directory, filename = self._get_separated_path(path)
             self._files_service.create_file(self._azure_file_share_name, directory, filename, 0)
 
-            fd = self._get_next_fd()
-            self.fds[fd] = self.File(path, None, False)
-            logger.debug("create operation end: path:{!r} mode:{} returned_fd:{}".format(path, mode, fd))
-            return fd
+            logger.debug("create operation end: path:{!r} mode:{}".format(path, mode))
+            return 0;
 
         except Exception as e:
             logger.exception("create operation exception: path:{!r} mode:{} exception:{}".format(path, mode, e))
@@ -194,41 +183,15 @@ class AzureFiles(LoggingMixIn, Operations):
             logger.exception("mkdir operation exception: path:{!r} mode:{} exception:{}".format(path, mode, e))
             raise FuseOSError(errno.EEXIST) # directory exists or a file exists by the same name
 
-    def open(self, path, flags=0):
-        '''
-        Open a file and return the fd to that file. 
-        TODO: flags are not respected. Support could be added.
-        '''
-        logger.info("open operation begin: path:{!r} flags:{}".format(path, flags))
-        try:
-            path = path.lstrip('/')
-            directory, filename = self._get_separated_path(path)
-
-            data = self._files_service.get_file_to_bytes(self._azure_file_share_name, directory, filename).content
-
-            fd = self._get_next_fd()
-            self.fds[fd] = self.File(path, data, False)
-            logger.debug("open operation end: path:{!r} flags:{} len(data):{} return-fd:{}".format(path, flags, len(data), fd))
-            return fd
-        except Exception as e:
-            logger.exception("open operation exception: path:{!r} flags:{} exception:{}".format(path, flags, e))
-            raise FuseOSError(ENOENT)
-
     def read(self, path, size, offset, fh):
         '''
         read a file and return a buffer containing that area of the file
         '''
         logger.info("read operation begin: path:{!r} size:{} offset:{} fh:{}".format(path, size, offset, fh))
         try:
-            if not fh or fh not in self.fds:
-                logger.debug("read operation missing fh from fds: fh:{} fds:{}".format(fh, self.fds))
-                raise FuseOSError(ENOENT)
-
-            data = self.fds[fh].bytes
-
-            data_to_return = b''
-            if size > 0:
-                data_to_return =  data[offset:offset + size]
+            dir_path, file_path = self._get_separated_path(path)
+            data_to_return = self._files_service.get_file_to_bytes(
+                self._azure_file_share_name, dir_path, file_path, offset, offset + size - 1).content
 
             #logger.info('read the following: "{}"'.format(data_to_return))
             logger.debug(
@@ -321,7 +284,11 @@ class AzureFiles(LoggingMixIn, Operations):
         try:
 
             path = path.strip('/')
-            self._files_service.delete_directory(self._azure_file_share_name, path)
+            try:
+                self._files_service.delete_directory(self._azure_file_share_name, path)
+            except AzureConflictHttpError as error:
+               logger.debug("rmdir operation: path:{!r} directory not empty")
+               raise FuseOSError(errno.ENOTEMPTY)
 
             # TODO: we may want to handle not found, not empty, not allowed.
             # # check response code to see if we should return a more specific error
@@ -337,6 +304,8 @@ class AzureFiles(LoggingMixIn, Operations):
 
             logger.debug("rmdir operation end: path:{!r}".format(path))
         except Exception as e:
+            logger.exception(
+                "rmdir operation exception: path:{!r} exception:{}".format(path, e))
             raise e
 
     def unlink(self, path):
@@ -360,78 +329,30 @@ class AzureFiles(LoggingMixIn, Operations):
         '''
         logger.info("write operation begin: path:{!r} len(data):{} offset:{} fh:{}".format(path, len(data), offset, fh))
         try:
-            if not fh or fh not in self.fds:
-                logger.debug("write operation fh not in fds list.: path:{!r} len(data):{} offset:{} fh:{}".format(path, len(data), offset, fh))
-                raise FuseOSError(ENOENT)
-            else:
-                d = self.fds[fh].bytes
-                if d is None:
-                    d = b''
+            path = path.lstrip('/')
+            directory, filename = self._get_separated_path(path)
+            f = self._files_service.get_file_properties(self._azure_file_share_name, directory, filename)
+            file_length = f.properties.content_length 
+            if offset < 0 or offset > file_length:
+                logger.debug("write operation offset negative or exceeds file length: path:{!r} len(data):{} offset:{} fh:{}".format(path, len(data), offset, fh))
+                raise FuseOSError(errno.EINVAL)
+            # write the data at the range adding old data to the front and back of it.
+            data_length = len(data)
 
-                if offset < 0 or offset > len(d):
-                    logger.debug("write operation offset negative or exceeds file length: path:{!r} len(data):{} offset:{} fh:{}".format(path, len(data), offset, fh))
-                    raise FuseOSError(errno.EINVAL)
-                # write the data at the range adding old data to the front and back of it.
-                new_data = d[:offset] + data + d[offset+len(data):]
-                self.fds[fh] = self.File(self.fds[fh].path, new_data, True)
-                path = path.lstrip('/')
-                directory, filename = self._get_separated_path(path)
-                data_length = len(data)
+            # update range fails if the file isn't as long as the range
+            if file_length < offset + data_length:
+                self._files_service.resize_file(self._azure_file_share_name, directory, filename, offset + data_length)
 
-                # TODO: Consider not calling this each time.
-                # in case the size is smaller than the original or larger than the original
-                self._files_service.resize_file(self._azure_file_share_name, directory, filename, len(new_data))
+            # update the range specified by this write.
+            self._files_service.update_range(self._azure_file_share_name, directory, filename, data, start_range=offset, end_range=offset+len(data)-1)
 
-                # update the range specified by this right.
-                self._files_service.update_range(self._azure_file_share_name, directory, filename, data, start_range=offset, end_range=offset+len(data)-1)
+            # TODO: if we ever try to cache attrs, we would have to update the st_mtime.
 
-                # TODO: if we ever try to cache attrs, we would have to update the st_mtime.
-
-                logger.debug("write operation end: path:{!r} len(data):{} offset:{} fh:{} return-data-length:{}".format(path, len(data), offset, fh, data_length))
-                return data_length
+            logger.debug("write operation end: path:{!r} len(data):{} offset:{} fh:{} return-data-length:{}".format(path, len(data), offset, fh, data_length))
+            return data_length
         except Exception as e:
             logger.exception("write operation exception: path:{!r} len(data):{} offset:{} fh:{} exception:{}".format(path, len(data), offset, fh, e))
             raise e
-
-    def _flush(self, path, fh=None):
-        '''
-        flush
-        '''
-        logger.debug("flush operation begin: path:{!r} fh:{}".format(path, fh))
-        try:
-            if not fh:
-                logger.debug("Attempted to Flush a file that didn't have a file handle.")
-                raise FuseOSError(errno.EIO)
-            else:
-                if fh not in self.fds:
-                    logger.debug("Attempted to Flush a file that didn't have a file handle in the self.fds list.")
-                    raise FuseOSError(errno.EIO)
-                path = self.fds[fh].path
-                data = self.fds[fh].bytes
-                dirty = self.fds[fh].dirty
-
-                if not dirty:
-                    logger.debug("flush operation end (not dirty): path:{!r} fh:{}".format(path, fh))
-                    return 0 # avoid redundant write
-
-                try:
-                    path = path.lstrip('/')
-                    directory, filename = self._get_separated_path(path)
-                    self._files_service.create_file_from_bytes(self._azure_file_share_name, directory, filename, data)
-                except Exception as e:
-                    logger.exception("exception while attempting to flush:{}".format(e))
-                    raise e
-
-                self.fds[fh] = self.File(path, data, False)  # mark as not dirty
-
-                logger.debug("flush operation (was dirty): path:{!r} fh:{}".format(path, fh))
-
-                return 0
-        except Exception as e:
-            logger.exception(
-                "flush operation exception: path:{!r} fh:{} exception:{}".format(path, fh, e))
-            raise FuseOSError(errno.EIO)
-
 
     def truncate(self, path, length, fh=None):
         '''
@@ -439,52 +360,20 @@ class AzureFiles(LoggingMixIn, Operations):
         See truncate(2) for details. This call is required for read/write filesystems,
         because recreating a file will first truncate it.
         '''
-        file_opened = False
         logger.info("truncate operation begin: path:{!r} length:{} fh:{}".format(path, length, fh))
         # length must be positive
         if length < 0:
             raise FuseOSError(errno.EINVAL)
         try:
-            if not fh:
-                fh = self.open(path)
-                file_opened = True
-            data = self.fds[fh].bytes
-            if not data:
-                data = b''
-
-            # if length is longer than the data, we need to extend the bytestr.
-            if len(data) < length:
-                data = data.ljust(length, b'\0')
-
-            # alter the file
-            self.fds[fh] = self.File(self.fds[fh].path, data[:length], True)
-
-            self._flush(path, fh)
-
+            path = path.lstrip('/')
+            directory, filename = self._get_separated_path(path)
+            self._files_service.resize_file(self._azure_file_share_name, directory, filename, length)
         except Exception as e:
             logger.exception("truncate operation exception: path:{!r} length:{} fh:{} e:{}".format(path, length, fh, e))
             raise e
         finally:
-            if file_opened:
-                self.release(path, fh)
             logger.debug("truncate operation end: path:{!r} length:{} fh:{}".format(path, length, fh))
 
-    def release(self, path, fh=None):
-        '''
-        release
-        '''
-        logger.info("release operation begin: path:{!r} fh:{}".format(path, fh))
-        try:
-            if fh is not None and fh in self.fds:
-                # ensure this is flushed before closing file handlers
-                self._flush(path, fh)
-                del self.fds[fh]
-                # add to freedlist
-                self._freed_fd_list.append(fh)
-            logger.debug("release operation end: path:{!r} fh:{}".format(path, fh))
-        except Exception as e:
-            logger.exception("release operation exception: path:{!r} fh:{} exception:{}".format(path, fh, e))
-            raise e
     
     def chmod(self, path, mode):
         '''
