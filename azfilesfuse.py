@@ -18,7 +18,7 @@ import traceback
 from collections import defaultdict, namedtuple
 from time import time
 import azure.storage.file as file
-from azure.common import AzureMissingResourceHttpError, AzureConflictHttpError
+from azure.common import AzureMissingResourceHttpError, AzureConflictHttpError, AzureHttpError
 
 import platform
 import urllib.parse
@@ -40,11 +40,6 @@ if platform.system() is not 'Windows':
     logger.addHandler(syslog_handler)
 
 class AzureFiles(LoggingMixIn, Operations):
-
-    #_fd = 0
-    #_freed_fd_list = []
-
-    #File = namedtuple("File", ["path", "bytes", "dirty"], verbose=False, rename=False)
 
     '''
     A FUSE File Sytem for using Azure Files with a SAS token for connecting
@@ -350,6 +345,13 @@ class AzureFiles(LoggingMixIn, Operations):
 
             logger.debug("write operation end: path:{!r} len(data):{} offset:{} fh:{} return-data-length:{}".format(path, len(data), offset, fh, data_length))
             return data_length
+        except AzureHttpError as ahe:
+            if [i for i in ahe.args if 'ShareSizeLimitReached' in i]:
+                logger.exception("write operation AzureHTTPError. ShareSizeLimitReached path:{!r} len(data):{} offset:{} fh:{} exception:{}".format(path, len(data), offset, fh, ahe))
+                raise FuseOSError(errno.ENOSPC)
+            
+            logger.exception("write operation AzureHTTPError: path:{!r} len(data):{} offset:{} fh:{} exception:{}".format(path, len(data), offset, fh, ahe))
+            raise ahe
         except Exception as e:
             logger.exception("write operation exception: path:{!r} len(data):{} offset:{} fh:{} exception:{}".format(path, len(data), offset, fh, e))
             raise e
