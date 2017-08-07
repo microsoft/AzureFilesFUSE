@@ -13,7 +13,7 @@
     <OutputPath>.</OutputPath>
     <Name>AzureFilesFuseDriver</Name>
     <RootNamespace>AzureFilesFuseDriver</RootNamespace>
-    <InterpreterId>MSBuild|{9683f8df-f6c6-4c2f-a361-5e92b8bf6047}|$(MSBuildProjectFullPath)</InterpreterId>
+    <InterpreterId>MSBuild|env36|$(MSBuildProjectFullPath)</InterpreterId>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <DebugSymbols>true</DebugSymbols>
@@ -25,8 +25,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="azfilesfuse.py" />
-    <Compile Include="test_azfilesfuse - Copy.py" />
-    <Compile Include="test_azfilesfuse.py" />
   </ItemGroup>
   <ItemGroup>
     <InterpreterReference Include="Global|PythonCore|3.5|x64" />
@@ -45,6 +43,15 @@
       <LibraryPath>Lib\</LibraryPath>
       <PathEnvironmentVariable>PYTHONPATH</PathEnvironmentVariable>
       <Architecture>Amd64</Architecture>
+    </Interpreter>
+    <Interpreter Include="env36\">
+      <Id>env36</Id>
+      <Version>3.6</Version>
+      <Description>env36 (Python 3.6 (32-bit))</Description>
+      <InterpreterPath>Scripts\python.exe</InterpreterPath>
+      <WindowsInterpreterPath>Scripts\pythonw.exe</WindowsInterpreterPath>
+      <PathEnvironmentVariable>PYTHONPATH</PathEnvironmentVariable>
+      <Architecture>X86</Architecture>
     </Interpreter>
   </ItemGroup>
   <PropertyGroup>
