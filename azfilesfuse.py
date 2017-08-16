@@ -66,7 +66,7 @@ class WriteInfo(object):
                 self.processing = True
             with self.files.file_cache[self.orig_path].write_lock:
                 max_size = self.files.file_cache[self.orig_path].max_size
-                logger.debug('current max size {} is {}'.format(path, max_size))
+                #logger.debug('current max size {} is {}'.format(path, max_size))
                 data_length = len(self.data)
                 if max_size < self.offset + data_length:
                     f = self.files._files_service.get_file_properties(self.files._azure_file_share_name, 
@@ -74,12 +74,12 @@ class WriteInfo(object):
                     file_length = f.properties.content_length 
 
                     if file_length < self.offset + data_length:
-                            logger.debug('resizing file {} to {} from {}'.format(path, self.offset + data_length, file_length))
+                            #logger.debug('resizing file {} to {} from {}'.format(path, self.offset + data_length, file_length))
                             self.files._files_service.resize_file(self.files._azure_file_share_name, self.directory, self.filename, self.offset + data_length)
                             self.files.file_cache[self.orig_path].max_size = self.offset + data_length
             
                 # update the range specified by this write.
-                logger.debug('updating {} range {} to {}'.format(path, self.offset, self.offset+data_length-1))
+                #logger.debug('updating {} range {} to {}'.format(path, self.offset, self.offset+data_length-1))
                 self.files._files_service.update_range(self.files._azure_file_share_name, self.directory, self.filename, self.data, start_range=self.offset, end_range=self.offset+data_length-1)
 
                 logger.debug('write committed ' + path)
@@ -196,24 +196,28 @@ class AzureFiles(LoggingMixIn, Operations):
             if isinstance(item, models.Directory):
                 st['st_mode'] = stat.S_IFDIR | 0o777
                 st['st_nlink'] = 2
+                properties = self._files_service.get_directory_properties(
+                    self._azure_file_share_name, path).properties
             else:
                 st['st_mode'] = stat.S_IFREG | 0o777
                 st['st_nlink'] = 1
                 st['st_size'] = item.properties.content_length
-
+                properties = self._files_service.get_file_properties(
+                    self._azure_file_share_name, directory, filename).properties
+            
             # Setting Modified Time
-            #try:
-            #    st['st_mtime'] = properties.last_modified.timestamp()
-            #except Exception:
-            #    logger.warning(
-            #        "getattr operation setting modified time failed: path:{!r} fh:{} st:{}".format(path, fh, st))
-            #
-            ## Setting Created Time
-            #try:
-            #    st['st_ctime'] = properties.last_modified.timestamp()
-            #except Exception:
-            #    logger.warning(
-            #        "getattr operation setting create time failed: path:{!r} fh:{} st:{}".format(path, fh, st))
+            try:
+                st['st_mtime'] = properties.last_modified.timestamp()
+            except Exception:
+                logger.warning(
+                    "getattr operation setting modified time failed: path:{!r} fh:{} st:{}".format(path, fh, st))
+            
+            # Setting Created Time
+            try:
+                st['st_ctime'] = properties.last_modified.timestamp()
+            except Exception:
+                logger.warning(
+                    "getattr operation setting create time failed: path:{!r} fh:{} st:{}".format(path, fh, st))
 
             logger.debug("getattr operation end: path:{!r} fh:{} return:{}".format(path, fh, st))
             return st
