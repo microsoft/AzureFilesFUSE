@@ -82,7 +82,7 @@ class WriteInfo(object):
                 #logger.debug('updating {} range {} to {}'.format(path, self.offset, self.offset+data_length-1))
                 self.files._files_service.update_range(self.files._azure_file_share_name, self.directory, self.filename, self.data, start_range=self.offset, end_range=self.offset+data_length-1)
 
-                logger.debug('write committed ' + path)
+                # logger.debug('write committed ' + path)
         except Exception as e:
             logger.warning('error writing ' + str(e))
 
