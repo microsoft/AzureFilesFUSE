@@ -77,12 +77,20 @@ class WriteInfo(object):
                             #logger.debug('resizing file {} to {} from {}'.format(path, self.offset + data_length, file_length))
                             self.files._files_service.resize_file(self.files._azure_file_share_name, self.directory, self.filename, self.offset + data_length)
                             self.files.file_cache[self.orig_path].max_size = self.offset + data_length
+                            cached = self.files._get_cached_dir(self.directory, False)
+                            if cached is not None:
+                                file = cached.get(self.filename)
+                                if cached is not None:
+                                    file.properties.content_length = self.offset + data_length
+                                else:
+                                    props = models.FileProperties()
+                                    props.content_length = self.offset + data_length
+                                    cached[self.filename] = models.File(self.filename, None, props)
             
                 # update the range specified by this write.
                 #logger.debug('updating {} range {} to {}'.format(path, self.offset, self.offset+data_length-1))
                 self.files._files_service.update_range(self.files._azure_file_share_name, self.directory, self.filename, self.data, start_range=self.offset, end_range=self.offset+data_length-1)
 
-                # logger.debug('write committed ' + path)
         except Exception as e:
             logger.warning('error writing ' + str(e))
 
@@ -255,6 +263,7 @@ class AzureFiles(LoggingMixIn, Operations):
         read a file and return a buffer containing that area of the file
         '''
         logger.debug("read operation begin: path:{!r} size:{} offset:{} fh:{}".format(path, size, offset, fh))
+        self.flush(path)
         try:
             dir_path, file_path = self._get_separated_path(path)
             data_to_return = self._files_service.get_file_to_bytes(
@@ -526,6 +535,15 @@ class AzureFiles(LoggingMixIn, Operations):
             with self.file_cache[orig_path].write_lock:
                 self._files_service.resize_file(self._azure_file_share_name, directory, filename, length)
                 self.file_cache[orig_path].max_size = length
+                cached = self._get_cached_dir(directory, False)
+                if cached is not None:
+                    file = cached.get(filename)
+                    if cached is not None:
+                        file.properties.content_length = length
+                    else:
+                        props = models.FileProperties()
+                        props.content_length = length
+                        cached[filename] = models.File(filename, None, props)
         except Exception as e:
             logger.exception("truncate operation exception: path:{!r} length:{} fh:{} e:{}".format(path, length, fh, e))
             raise e
