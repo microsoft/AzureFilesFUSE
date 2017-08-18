@@ -32,7 +32,8 @@ executor = concurrent.futures.ThreadPoolExecutor(4)
 #import ptvsd
 #ptvsd.enable_attach(secret='my_secret')
 
-# The minimum level to log, NOTSET,DEBUG,INFO,WARNING,ERROR,CRITICAL.
+# This controls the minimum level that is logged.
+# Available levels are: NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL.
 LOGGING_LEVEL=logging.INFO
 console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
@@ -68,23 +69,24 @@ class WriteInfo(object):
                 max_size = self.files.file_cache[self.orig_path].max_size
                 #logger.debug('current max size {} is {}'.format(path, max_size))
                 data_length = len(self.data)
-                if max_size < self.offset + data_length:
-                    f = self.files._files_service.get_file_properties(self.files._azure_file_share_name, 
+                computed_content_length = self.offset + data_length
+                if max_size < computed_content_length
+                    f = self.files._files_service.get_file_properties(self.files._azure_file_share_name,
                                                             self.directory, self.filename)
-                    file_length = f.properties.content_length 
+                    file_length = f.properties.content_length
 
-                    if file_length < self.offset + data_length:
-                            #logger.debug('resizing file {} to {} from {}'.format(path, self.offset + data_length, file_length))
-                            self.files._files_service.resize_file(self.files._azure_file_share_name, self.directory, self.filename, self.offset + data_length)
-                            self.files.file_cache[self.orig_path].max_size = self.offset + data_length
+                    if file_length < computed_content_length:
+                            #logger.debug('resizing file {} to {} from {}'.format(path, computed_content_length, file_length))
+                            self.files._files_service.resize_file(self.files._azure_file_share_name, self.directory, self.filename, computed_content_length)
+                            self.files.file_cache[self.orig_path].max_size = computed_content_length
                             cached = self.files._get_cached_dir(self.directory, False)
                             if cached is not None:
                                 file = cached.get(self.filename)
                                 if cached is not None:
-                                    file.properties.content_length = self.offset + data_length
+                                    file.properties.content_length = computed_content_length
                                 else:
                                     props = models.FileProperties()
-                                    props.content_length = self.offset + data_length
+                                    props.content_length = computed_content_length
                                     cached[self.filename] = models.File(self.filename, None, props)
             
                 # update the range specified by this write.
@@ -233,7 +235,7 @@ class AzureFiles(LoggingMixIn, Operations):
             # This log is noisy as it occurs if the file isn't found. Only uncomment for debugging.
             #logger.exception(
             #    "getattr operation exception: path:{!r} fh:{} exception:{}".format(path, fh, e))
-            raise FuseOSError(ENOENT)   
+            raise FuseOSError(ENOENT)
 
     def mkdir(self, path, mode):
         '''
@@ -283,7 +285,7 @@ class AzureFiles(LoggingMixIn, Operations):
     def _get_cached_dir(self, path, force = True):
         cached = self.dir_cache.get(path)
         if (cached is None or cached[1] + 5 < time()) and force:
-            directory_listing = { item.name:item for item in 
+            directory_listing = { item.name:item for item in
                                   self._files_service.list_directories_and_files(self._azure_file_share_name, path)
             }
             self.dir_cache[path] = directory_listing, time()
@@ -343,7 +345,7 @@ class AzureFiles(LoggingMixIn, Operations):
                     if cached is not None:
                         try:
                             del cached[filename]
-                        except KeyError: 
+                        except KeyError:
                             pass
                     directory, filename = self._get_separated_path(new_path)
                     cached = self._get_cached_dir(directory, False)
@@ -353,9 +355,9 @@ class AzureFiles(LoggingMixIn, Operations):
                                 cached[filename] = models.Directory(filename)
                             else:
                                 props = models.FileProperties()
-                                props.content_length = new_length 
+                                props.content_length = new_length
                                 cached[filename] = models.File(filename, None, props)
-                        except KeyError: 
+                        except KeyError:
                             pass
             logger.debug("rename operation end: old:{} new:{}".format(old, new))
             return 0
@@ -476,13 +478,13 @@ class AzureFiles(LoggingMixIn, Operations):
             data_length = len(data)
             
 
-            # Take the write lock to see if we can coalesce 
+            # Take the write lock to see if we can coalesce
             with self.file_cache[orig_path].append_write_lock:
                 found = False
                 if self.file_cache[orig_path].writes:
                     last = self.file_cache[orig_path].writes[-1]
-                    if (not last.processing and 
-                        (last.offset + len(last.data)) == offset and 
+                    if (not last.processing and
+                        (last.offset + len(last.data)) == offset and
                         len(last.data) + len(data) < file.FileService.MAX_RANGE_SIZE):
                         # let's piggy back on this write...
                         last.data += data
@@ -553,7 +555,7 @@ class AzureFiles(LoggingMixIn, Operations):
     
     def chmod(self, path, mode):
         '''
-        chmod. This command is a NOP right now. 
+        chmod. This command is a NOP right now.
         If it is missing this is interpreted as a read-only file system though.
         '''
         logger.debug("chmod operation: path:{!r} mode:{}".format(path, mode))
