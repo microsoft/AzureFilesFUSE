@@ -2,6 +2,7 @@
 from __future__ import absolute_import, division, print_function
 
 import concurrent.futures
+import contextlib
 import errno
 import io
 import logging
@@ -94,7 +95,7 @@ class WriteInfo(object):
                 self.files._files_service.update_range(self.files._azure_file_share_name, self.directory, self.filename, self.data, start_range=self.offset, end_range=self.offset+data_length-1)
 
         except Exception as e:
-            logger.warning('error writing ' + str(e))
+            logger.warning('error writing {}', str(e))
 
 class FileCache:
     '''Tracks information that we've cached locally about an individual file.  Currently we track writes and use a couple
@@ -293,10 +294,8 @@ class AzureFiles(LoggingMixIn, Operations):
         return cached[0]
 
     def _clear_dir_cache(self, path, reason):
-        try:
+        with contextlib.suppress(KeyError):
             del self.dir_cache[path]
-        except KeyError:
-            pass
 
     def readdir(self, path, fh):
         '''
@@ -343,22 +342,18 @@ class AzureFiles(LoggingMixIn, Operations):
                     directory, filename = self._get_separated_path(old_path)
                     cached = self._get_cached_dir(directory, False)
                     if cached is not None:
-                        try:
+                        with contextlib.suppress(KeyError):
                             del cached[filename]
-                        except KeyError:
-                            pass
                     directory, filename = self._get_separated_path(new_path)
                     cached = self._get_cached_dir(directory, False)
                     if cached is not None:
-                        try:
+                        with contextlib.suppress(KeyError):
                             if new_length is None:
                                 cached[filename] = models.Directory(filename)
                             else:
                                 props = models.FileProperties()
                                 props.content_length = new_length
                                 cached[filename] = models.File(filename, None, props)
-                        except KeyError:
-                            pass
             logger.debug("rename operation end: old:{} new:{}".format(old, new))
             return 0
         except Exception as e:
@@ -410,10 +405,8 @@ class AzureFiles(LoggingMixIn, Operations):
                 directory, filename = self._get_separated_path(path)
                 cached = self._get_cached_dir(directory, False)
                 if cached is not None:
-                    try:
+                    with contextlib.suppress(KeyError):
                         del cached[filename]
-                    except KeyError:
-                        pass
             except AzureConflictHttpError as error:
                logger.debug("rmdir operation: path:{!r} directory not empty")
                raise FuseOSError(errno.ENOTEMPTY)
@@ -452,10 +445,8 @@ class AzureFiles(LoggingMixIn, Operations):
                 self.file_cache[orig_path].max_size = 0
             cached = self._get_cached_dir(directory, False)
             if cached is not None:
-                try:
+                with contextlib.suppress(KeyError):
                     del cached[filename]
-                except KeyError:
-                    pass
             logger.debug("unlink operation end: path:{!r}".format(path))
             return 0
         except Exception as e:
