@@ -274,15 +274,11 @@ class AzureFiles(LoggingMixIn, Operations):
                     self._azure_file_share_name, dir_path, file_path, offset, offset + size - 1).content
             except AzureHttpError as ahe:
                 if [i for i in ahe.args if 'InvalidRange' in i]:
-                    logger.debug("read operation bad range. Read to end of file instead. path:%r size:%d offset:%d fh:%d exception:%s", path, size, offset, fh, ahe)
-                    data_to_return = self._files_service.get_file_to_bytes(
-                        self._azure_file_share_name, dir_path, file_path, offset).content
-                    # it is possible that the file has gotten longer since we 
-                    # tried the first read. Cap the return at size
-                    if len(data_to_return) > size:
-                        data_to_return = data_to_return[:size]
+                    logger.debug("read operation bad range. Offset provided must have been larger than file. path:%r size:%d offset:%d fh:%d exception:%s", path, size, offset, fh, ahe)
+                    return FuseOSError(errno.EINVAL)
                 else:
                     raise ahe
+
             logger.debug(
                 "read operation end: path:%r size:%s offset:%s fh:%s data-to-return-length:%s",
                     path, size, offset, fh, len(data_to_return))
@@ -292,6 +288,7 @@ class AzureFiles(LoggingMixIn, Operations):
                 "read operation exception: path:%r size:%s offset:%s fh:%s exception:%s",
                     path, size, offset, fh, e)
             raise e
+
     def _get_cached_dir(self, path, force = True):
         cached = self.dir_cache.get(path)
         if (cached is None or cached[1] + 5 < time()) and force:
