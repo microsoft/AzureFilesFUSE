@@ -9,11 +9,14 @@ import logging
 import logging.handlers
 import os
 import platform
+
 import stat
 import sys
 import threading
 import traceback
 import urllib.parse
+import uuid
+
 from collections import defaultdict, deque, namedtuple
 from errno import ENOENT
 from sys import argv, exit
@@ -71,7 +74,7 @@ class WriteInfo(object):
                 #logger.debug('current max size %s is %d', path, max_size)
                 data_length = len(self.data)
                 computed_content_length = self.offset + data_length
-                if max_size < computed_content_length
+                if max_size < computed_content_length:
                     f = self.files._files_service.get_file_properties(self.files._azure_file_share_name,
                                                             self.directory, self.filename)
                     file_length = f.properties.content_length
@@ -283,6 +286,7 @@ class AzureFiles(LoggingMixIn, Operations):
                 "read operation end: path:%r size:%s offset:%s fh:%s data-to-return-length:%s",
                     path, size, offset, fh, len(data_to_return))
             return data_to_return
+
         except Exception as e:
             logger.exception(
                 "read operation exception: path:%r size:%s offset:%s fh:%s exception:%s",
@@ -338,6 +342,15 @@ class AzureFiles(LoggingMixIn, Operations):
                 # file exists at path. Would cause name collision
                 raise FuseOSError(errno.EALREADY)
 
+            if new_path.lower() == old_path.lower():
+                # Azure Files is case insensitive, but case preserving
+                # Do the rename by moving to an intermediate file
+                # So we can create a file with different casing.
+                temporary_path = "{}-rename-{}".format(old, uuid.uuid4())
+                self.rename(old, temporary_path)
+                self.rename(temporary_path, new)
+                return
+
             with self.file_cache[old_orig_path].write_lock:
                 new_length = self._rename(old_path, new_path, self._discover_item_type(old_path))
                 self.file_cache[old_orig_path].max_size = 0
@@ -368,7 +381,7 @@ class AzureFiles(LoggingMixIn, Operations):
             raise e
 
     def _rename(self, old_location, new_location, item_type):
-        logger.debug('_rename - old:%s new:%s type:%s' old_location, new_location, item_type)
+        logger.debug('_rename - old:%s new:%s type:%s', old_location, new_location, item_type)
         old_location = old_location.strip('/')
         new_location = new_location.strip('/')
         if item_type == 'directory':
