@@ -1,2 +1,5 @@
 env35
 env36
+env
+__pycache__
+.vs

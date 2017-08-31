@@ -259,10 +259,17 @@ class AzureFiles(LoggingMixIn, Operations):
 
             logger.debug("mkdir operation end: path:%r mode:%s", path, mode)
             return 0
+        except AzureHttpError as ahe:
+            logger.exception("mkdir operation azurehttperror exception: path:%r mode:%s exception:%s", path, mode, ahe)
+
+            if [i for i in ahe.args if 'The specified parent path does not exist' in i]:
+                raise FuseOSError(errno.ENOENT)
+            else:
+                # if we fail, it is most likely the file exists. 
+                raise FuseOSError(errno.EEXIST) # directory exists or a file exists by the same name
         except Exception as e:
-            # if we fail, it is most likely the file exists.
             logger.exception("mkdir operation exception: path:%r mode:%s exception:%s", path, mode, e)
-            raise FuseOSError(errno.EEXIST) # directory exists or a file exists by the same name
+            raise e
 
     def read(self, path, size, offset, fh):
         '''
@@ -301,7 +308,10 @@ class AzureFiles(LoggingMixIn, Operations):
             }
             self.dir_cache[path] = directory_listing, time()
             return directory_listing
-        return cached[0]
+        if cached is None:
+            return None
+        else:
+            return cached[0]
 
     def _clear_dir_cache(self, path, reason):
         with contextlib.suppress(KeyError):
@@ -468,6 +478,11 @@ class AzureFiles(LoggingMixIn, Operations):
                     del cached[filename]
             logger.debug("unlink operation end: path:%r", path)
             return 0
+        except AzureHttpError as ahe:
+            if [i for i in ahe.args if 'The specified resource does not exist' in i]:
+                raise FuseOSError(errno.ENOENT)
+            logger.exception("unlink operation AHE exception: path:%r exception:%s", path, ahe)
+            raise ahe
         except Exception as e:
             logger.exception("unlink operation exception: path:%r exception:%s", path, e)
             raise e
