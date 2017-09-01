@@ -1,6 +1,8 @@
 # Azure Files FUSE Driver
 ## Enables using SAS Tokens for mounting Azure Files shares
 
+[![Build Status](https://travis-ci.org/crwilcox/AzureFilesFUSE.svg?branch=master)](https://travis-ci.org/crwilcox/AzureFilesFUSE)
+
 ### Motivation
 I wanted to be able to use Shared Access Signature (SAS) Tokens for connecting to file shares. Microsoft Azure Files provides CIFS/SMB mounting but, unfortunately, only mounting via Account Key is supported.
 

@@ -6,6 +6,7 @@ import ctypes.util
 import platform
 import requests
 import json
+import time
 import vcr
 import azure.storage.file as file
 from azure.storage.file import models
@@ -114,12 +115,10 @@ class Test_azfilesfuse(unittest.TestCase):
     def test_getattr(self,):
         self.azure_fs.create_file_from_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt', b'test file content')
         self.azure_fs.create_directory(self.STORAGE_ACCOUNT_SHARE, 'dir')
-
-        # {'st_ctime': 1504203454.0, 'st_gid': 123, 'st_mode': 33188, 
-        #  'st_mtime': 1504203454.0, 'st_nlink': 1, 'st_size': 17, 'st_uid': 123}
-        import time
         t = time.time()
         
+        # {'st_ctime': 1504203454.0, 'st_gid': 123, 'st_mode': 33188, 
+        #  'st_mtime': 1504203454.0, 'st_nlink': 1, 'st_size': 17, 'st_uid': 123}
         file_attr = self.fuse_driver.getattr('file.txt')
         self.assertTrue(abs(file_attr['st_ctime']-t) < 5, "ctime:{} walltime:{}".format(file_attr['st_ctime'], t))
         self.assertTrue(abs(file_attr['st_mtime']-t) < 5, "mtime:{} walltime:{}".format(file_attr['st_mtime'], t))
