@@ -121,8 +121,8 @@ class Test_azfilesfuse(unittest.TestCase):
         t = time.time()
         
         file_attr = self.fuse_driver.getattr('file.txt')
-        self.assertTrue(abs(file_attr['st_ctime']-t) < 1)
-        self.assertTrue(abs(file_attr['st_mtime']-t) < 1)
+        self.assertTrue(abs(file_attr['st_ctime']-t) < 5, "ctime:{} walltime:{}".format(file_attr['st_ctime'], t))
+        self.assertTrue(abs(file_attr['st_mtime']-t) < 5, "mtime:{} walltime:{}".format(file_attr['st_mtime'], t))
         del(file_attr['st_ctime'])
         del(file_attr['st_mtime'])
         self.assertDictEqual(file_attr, {'st_gid': 123, 'st_mode': 33188, 'st_nlink': 1, 'st_size': 17, 'st_uid': 123})
@@ -130,8 +130,8 @@ class Test_azfilesfuse(unittest.TestCase):
         # {'st_ctime': 1504203454.0, 'st_gid': 123, 'st_mode': 16877, 
         #  'st_mtime': 1504203454.0, 'st_nlink': 2, 'st_uid': 123}
         dir_attr = self.fuse_driver.getattr('dir')
-        self.assertTrue(abs(dir_attr['st_ctime']-t) < 1)
-        self.assertTrue(abs(dir_attr['st_mtime']-t) < 1)
+        self.assertTrue(abs(dir_attr['st_ctime']-t) < 5, "ctime:{} walltime:{}".format(dir_attr['st_ctime'], t))
+        self.assertTrue(abs(dir_attr['st_mtime']-t) < 5, "mtime:{} walltime:{}".format(dir_attr['st_mtime'], t))
         del(dir_attr['st_ctime'])
         del(dir_attr['st_mtime'])
         self.assertDictEqual(dir_attr, {'st_gid': 123, 'st_mode': 16877, 'st_nlink': 2, 'st_uid': 123})
