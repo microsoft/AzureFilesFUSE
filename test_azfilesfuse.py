@@ -231,6 +231,30 @@ class Test_azfilesfuse(unittest.TestCase):
         with self.assertRaisesRegex(Exception, '\[Errno 2\] No such file or directory'):
             self.fuse_driver.rename('fnf.txt', 'fnf2.txt')
 
+    def test_rename_delete_odd_chars(self):
+        self.azure_fs.create_file_from_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt', b'test file content')
+        self.azure_fs.create_directory(self.STORAGE_ACCOUNT_SHARE, 'dir')
+
+        self.fuse_driver.rename('file.txt', 'file%20renamed.txt')
+        self.fuse_driver.rename('dir', 'dir%20renamed')
+        readdir_result = self.fuse_driver.readdir('', None)
+        self.assertCountEqual(['.', '..', 'file%20renamed.txt', 'dir%20renamed'], readdir_result)
+
+        self.fuse_driver.write('file%20renamed.txt', b'changed content', 0, None)
+        self.fuse_driver.flush('file%20renamed.txt')
+        readdir_result = self.fuse_driver.readdir('', None)
+        self.assertCountEqual(['.', '..', 'file%20renamed.txt', 'dir%20renamed'], readdir_result)
+
+        self.fuse_driver.create('file renamed.txt', None)
+        self.fuse_driver.write('file renamed.txt', b'different content', 0, None)
+        self.fuse_driver.flush('file renamed.txt')
+        readdir_result = self.fuse_driver.readdir('', None)
+        self.assertCountEqual(['.', '..', 'file%20renamed.txt', 'file renamed.txt', 'dir%20renamed'], readdir_result)
+
+        self.fuse_driver.unlink("file%20renamed.txt")
+        readdir_result = self.fuse_driver.readdir('', None)
+        self.assertCountEqual(['.', '..', 'file renamed.txt', 'dir%20renamed'], readdir_result)
+
     def test_rmdir(self):
         self.azure_fs.create_directory(self.STORAGE_ACCOUNT_SHARE, 'direxists')
         self.fuse_driver.rmdir('direxists')
