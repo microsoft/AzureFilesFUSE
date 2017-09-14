@@ -339,17 +339,17 @@ class Test_azfilesfuse(unittest.TestCase):
 
         # TODO: verify fails if file handle isn't open for write.  (RESPECT
         # ATTRIBUTES OF OPEN, CURRENTLY WE DON'T
-
-    def mock_get_put_head(*args, **kwargs):
-        request_method = args[0]
-
-        if request_method == 'GET':
-            return Test_NBFuse.mocked_request_open_file_get(*args, **kwargs)
-        if request_method == 'PUT':
-            return Test_NBFuse.mocked_request_flush_put(*args, **kwargs)
-        if request_method == 'HEAD':
-            return Test_NBFuse.mocked_request_head_file(*args, **kwargs)
     
+    def test_write_getattr_read(self):
+        # Created after https://github.com/crwilcox/AzureFilesFUSE/issues/10
+        self.fuse_driver.create('file.txt', None)
+        write_length = self.fuse_driver.write('file.txt', b'hello\nworld\n', 0, None)
+        self.assertEqual(write_length, 12, "Write should have been 12 bytes")
+        attrs = self.fuse_driver.getattr('file.txt')
+        self.assertEqual(attrs['st_size'], write_length, "Size of GetAttr not matching size of write")
+        content = self.fuse_driver.read('file.txt', 5, 0, None)
+        self.assertEqual(b'hello', content)
+
     def test_flush(self):
         # TODO: test internal flush behavior
         pass

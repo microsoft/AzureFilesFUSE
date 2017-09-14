@@ -71,7 +71,6 @@ class WriteInfo(object):
                 self.processing = True
             with self.files.file_cache[self.orig_path].write_lock:
                 max_size = self.files.file_cache[self.orig_path].max_size
-                #logger.debug('current max size %s is %d', path, max_size)
                 data_length = len(self.data)
                 computed_content_length = self.offset + data_length
                 if max_size < computed_content_length:
@@ -80,19 +79,20 @@ class WriteInfo(object):
                     file_length = f.properties.content_length
 
                     if file_length < computed_content_length:
-                            #logger.debug('resizing file %s to %d from %d', path, computed_content_length, file_length)
-                            self.files._files_service.resize_file(self.files._azure_file_share_name, self.directory, self.filename, computed_content_length)
-                            self.files.file_cache[self.orig_path].max_size = computed_content_length
-                            cached = self.files._get_cached_dir(self.directory, False)
+                        self.files._files_service.resize_file(self.files._azure_file_share_name, self.directory, self.filename, computed_content_length)
+                        self.files.file_cache[self.orig_path].max_size = computed_content_length
+                        cached = self.files._get_cached_dir(self.directory, False)
+                        if cached is not None:
+                            file = cached.get(self.filename)
                             if cached is not None:
-                                file = cached.get(self.filename)
-                                if cached is not None:
-                                    file.properties.content_length = computed_content_length
-                                else:
-                                    props = models.FileProperties()
-                                    props.content_length = computed_content_length
-                                    cached[self.filename] = models.File(self.filename, None, props)
-            
+                                logger.debug("Updating content length to computed length:%s", computed_content_length)
+                                file.properties.content_length = computed_content_length
+                            else:
+                                props = models.FileProperties()
+                                props.content_length = computed_content_length
+                                logger.debug("Updating cached content length:%s", props.content_length)
+                                cached[self.filename] = models.File(self.filename, None, props)
+
                 # update the range specified by this write.
                 #logger.debug('updating %s range %d to %d', path, self.offset, self.offset+data_length-1)
                 self.files._files_service.update_range(self.files._azure_file_share_name, self.directory, self.filename, self.data, start_range=self.offset, end_range=self.offset+data_length-1)
@@ -155,7 +155,6 @@ class AzureFiles(LoggingMixIn, Operations):
         TODO: Mode is not respected at this time. Support could be added
         '''
         path = path.lstrip('/')
-        logger.debug("create operation begin: path:%r  mode:%s", path, mode)
         try:
             if not path:
                 raise FuseOSError(errno.EINVAL)
@@ -167,7 +166,6 @@ class AzureFiles(LoggingMixIn, Operations):
                 props = models.FileProperties()
                 props.content_length = 0
                 cached[filename] = models.File(filename, None, props)
-            logger.debug("create operation end: path:%r mode:%s", path, mode)
             return 0;
 
         except Exception as e:
@@ -185,16 +183,19 @@ class AzureFiles(LoggingMixIn, Operations):
         st_uid;    /* user-id of owner */
         st_gid;    /* group-id of owner */
         '''
-        logger.debug("getattr operation begin: path:%r fh:%s", path, fh)
         try:
+            # because getattr returns size, we need to wait on writes to complete
+            self.flush(path, fh)
+            logger.debug("flush done")
+
             path = path.lstrip('/')
-            logger.debug('getattr request: %r', path)
             directory, filename = self._get_separated_path(path)
             st = {}
             uid, gid, pid = fuse_get_context()
 
             st['st_uid'] = uid
             st['st_gid'] = gid
+
 
             if path == '':
                 st['st_mode'] = stat.S_IFDIR | 0o755
@@ -233,7 +234,6 @@ class AzureFiles(LoggingMixIn, Operations):
                 logger.warning(
                     "getattr operation setting create time failed: path:%r fh:%d st:%s", path, fh, st)
 
-            logger.debug("getattr operation end: path:%r fh:%s return:%s", path, fh, st)
             return st
         except Exception as e:
             # This log is noisy as it occurs if the file isn't found. Only uncomment for debugging.
@@ -247,7 +247,6 @@ class AzureFiles(LoggingMixIn, Operations):
         TODO: Mode is not respected at this time. Support could be added
         '''
         path = path.lstrip('/')
-        logger.debug("mkdir operation begin: path:%r mode:%s", path, mode)
         try:
             self._files_service.create_directory(
                 self._azure_file_share_name, path, fail_on_exist=True)
@@ -257,7 +256,6 @@ class AzureFiles(LoggingMixIn, Operations):
                 cached[filename] = models.Directory(filename)
                 logger.debug("mkdir operation: %s %s", filename, cached)
 
-            logger.debug("mkdir operation end: path:%r mode:%s", path, mode)
             return 0
         except AzureHttpError as ahe:
             logger.exception("mkdir operation azurehttperror exception: path:%r mode:%s exception:%s", path, mode, ahe)
@@ -275,7 +273,6 @@ class AzureFiles(LoggingMixIn, Operations):
         '''
         read a file and return a buffer containing that area of the file
         '''
-        logger.debug("read operation begin: path:%r size:%s offset:%s fh:%s", path, size, offset, fh)
         self.flush(path)
         try:
             dir_path, file_path = self._get_separated_path(path)
@@ -289,9 +286,6 @@ class AzureFiles(LoggingMixIn, Operations):
                 else:
                     raise ahe
 
-            logger.debug(
-                "read operation end: path:%r size:%s offset:%s fh:%s data-to-return-length:%s",
-                    path, size, offset, fh, len(data_to_return))
             return data_to_return
 
         except Exception as e:
@@ -323,14 +317,11 @@ class AzureFiles(LoggingMixIn, Operations):
         '''
         path = path.lstrip('/')
 
-        logger.debug("readdir operation begin: path:%r fh:%s", path, fh)
         try:
             directory_listing = self._get_cached_dir(path)
 
             readdir_return = ['.', '..']
             readdir_return.extend(directory_listing.keys())
-            logger.debug(
-                "readdir operation end: path:%r fh:%s return:%s", path, fh, readdir_return)
             return readdir_return
         except Exception as e:
             logger.exception(
@@ -342,7 +333,6 @@ class AzureFiles(LoggingMixIn, Operations):
         Rename a file or directory.
         TODO: Currently this implementation does not support renaming directories. Support needed.
         """
-        logger.debug("rename operation begin: old:%r new:%r", old, new)
         try:
             old_orig_path = old
             old_path = old.strip('/')
@@ -383,7 +373,6 @@ class AzureFiles(LoggingMixIn, Operations):
                                 props = models.FileProperties()
                                 props.content_length = new_length
                                 cached[filename] = models.File(filename, None, props)
-            logger.debug("rename operation end: old:%r new:%r", old, new)
             return 0
         except Exception as e:
             logger.exception(
@@ -425,7 +414,6 @@ class AzureFiles(LoggingMixIn, Operations):
         '''
         removes a directory at specified path
         '''
-        logger.debug("rmdir operation begin: path:%r", path)
         try:
 
             path = path.strip('/')
@@ -451,8 +439,6 @@ class AzureFiles(LoggingMixIn, Operations):
             # elif not response.status_code == requests.codes.ok:
             #     logger.exception("rmdir operation had bad response status code:{}".format(response.status_code))
             #     raise FuseOSError(errno.ENOENT)
-
-            logger.debug("rmdir operation end: path:%r", path)
         except Exception as e:
             logger.exception(
                 "rmdir operation exception: path:%r exception:%s", path, e)
@@ -462,7 +448,6 @@ class AzureFiles(LoggingMixIn, Operations):
         '''
         Delete file.
         '''
-        logger.debug("unlink operation begin: path:%r", path)
         self.flush(path)
         try:
             orig_path = path
@@ -476,7 +461,6 @@ class AzureFiles(LoggingMixIn, Operations):
             if cached is not None:
                 with contextlib.suppress(KeyError):
                     del cached[filename]
-            logger.debug("unlink operation end: path:%r", path)
             return 0
         except AzureHttpError as ahe:
             if [i for i in ahe.args if 'The specified resource does not exist' in i]:
@@ -491,7 +475,6 @@ class AzureFiles(LoggingMixIn, Operations):
         '''
         write
         '''
-        logger.debug("write operation begin: path:%r len(data):%d offset:%d fh:%d", path, len(data), offset, fh)
         try:
             orig_path = path
             path = path.lstrip('/')
@@ -525,8 +508,6 @@ class AzureFiles(LoggingMixIn, Operations):
                     future.add_done_callback(done)
           
             # TODO: if we ever try to cache attrs, we would have to update the st_mtime.
-
-            logger.debug("write operation end: path:%r len(data):%d offset:%d fh:%d return-data-length:%d", path, len(data), offset, fh, data_length)
             return data_length
         except AzureHttpError as ahe:
             if [i for i in ahe.args if 'ShareSizeLimitReached' in i]:
@@ -551,7 +532,6 @@ class AzureFiles(LoggingMixIn, Operations):
         See truncate(2) for details. This call is required for read/write filesystems,
         because recreating a file will first truncate it.
         '''
-        logger.debug("truncate operation begin: path:%r length:%d fh:%d", path, length, fh)
         # length must be positive
         if length < 0:
             raise FuseOSError(errno.EINVAL)
@@ -574,10 +554,7 @@ class AzureFiles(LoggingMixIn, Operations):
         except Exception as e:
             logger.exception("truncate operation exception: path:%r length:%d fh:%d e:%s", path, length, fh, e)
             raise e
-        finally:
-            logger.debug("truncate operation end: path:%r length:%d fh:%d", path, length, fh)
 
-    
     def chmod(self, path, mode):
         '''
         chmod. This command is a NOP right now.
