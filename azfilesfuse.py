@@ -71,7 +71,6 @@ class WriteInfo(object):
                 self.processing = True
             with self.files.file_cache[self.orig_path].write_lock:
                 max_size = self.files.file_cache[self.orig_path].max_size
-                #logger.debug('current max size %s is %d', path, max_size)
                 data_length = len(self.data)
                 computed_content_length = self.offset + data_length
                 if max_size < computed_content_length:
@@ -80,19 +79,20 @@ class WriteInfo(object):
                     file_length = f.properties.content_length
 
                     if file_length < computed_content_length:
-                            #logger.debug('resizing file %s to %d from %d', path, computed_content_length, file_length)
-                            self.files._files_service.resize_file(self.files._azure_file_share_name, self.directory, self.filename, computed_content_length)
-                            self.files.file_cache[self.orig_path].max_size = computed_content_length
-                            cached = self.files._get_cached_dir(self.directory, False)
+                        self.files._files_service.resize_file(self.files._azure_file_share_name, self.directory, self.filename, computed_content_length)
+                        self.files.file_cache[self.orig_path].max_size = computed_content_length
+                        cached = self.files._get_cached_dir(self.directory, False)
+                        if cached is not None:
+                            file = cached.get(self.filename)
                             if cached is not None:
-                                file = cached.get(self.filename)
-                                if cached is not None:
-                                    file.properties.content_length = computed_content_length
-                                else:
-                                    props = models.FileProperties()
-                                    props.content_length = computed_content_length
-                                    cached[self.filename] = models.File(self.filename, None, props)
-            
+                                logger.debug("Updating content length to computed length:%s", computed_content_length)
+                                file.properties.content_length = computed_content_length
+                            else:
+                                props = models.FileProperties()
+                                props.content_length = computed_content_length
+                                logger.debug("Updating cached content length:%s", props.content_length)
+                                cached[self.filename] = models.File(self.filename, None, props)
+
                 # update the range specified by this write.
                 #logger.debug('updating %s range %d to %d', path, self.offset, self.offset+data_length-1)
                 self.files._files_service.update_range(self.files._azure_file_share_name, self.directory, self.filename, self.data, start_range=self.offset, end_range=self.offset+data_length-1)
@@ -185,16 +185,19 @@ class AzureFiles(LoggingMixIn, Operations):
         st_uid;    /* user-id of owner */
         st_gid;    /* group-id of owner */
         '''
-        logger.debug("getattr operation begin: path:%r fh:%s", path, fh)
         try:
+            # because getattr returns size, we need to wait on writes to complete
+            self.flush(path, fh)
+            logger.debug("flush done")
+
             path = path.lstrip('/')
-            logger.debug('getattr request: %r', path)
             directory, filename = self._get_separated_path(path)
             st = {}
             uid, gid, pid = fuse_get_context()
 
             st['st_uid'] = uid
             st['st_gid'] = gid
+
 
             if path == '':
                 st['st_mode'] = stat.S_IFDIR | 0o755
