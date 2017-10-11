@@ -29,9 +29,10 @@ from azure.common import (AzureConflictHttpError, AzureHttpError,
 from azure.storage.file import models
 from dateutil import parser
 from fuse import FUSE, FuseOSError, LoggingMixIn, Operations, fuse_get_context
+import multiprocessing
 from requests import Session
 
-executor = concurrent.futures.ThreadPoolExecutor(4)
+executor = concurrent.futures.ThreadPoolExecutor(multiprocessing.cpu_count())
 
 #import ptvsd
 #ptvsd.enable_attach(secret='my_secret')
