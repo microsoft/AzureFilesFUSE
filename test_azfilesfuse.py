@@ -62,18 +62,23 @@ class Test_azfilesfuse(unittest.TestCase):
         env_name = os.environ.get("azfilesfuse_test_accountname", None)
         if env_name is not None:
             self.STORAGE_ACCOUNT_NAME = env_name
+        if self.STORAGE_ACCOUNT_NAME is None:
+            raise Exception("STORAGE_ACCOUNT_NAME variable necessary for running tests not set.")
+
         env_share = os.environ.get("azfilesfuse_test_accountshare", None)
         if env_share is not None:
             self.STORAGE_ACCOUNT_SHARE = env_share
+        if self.STORAGE_ACCOUNT_SHARE is None:
+            raise Exception("STORAGE_ACCOUNT_SHARE variable necessary for running tests not set.")
+
         env_sas_token = os.environ.get("azfilesfuse_test_accountsastoken", None)
         if env_sas_token is not None:
             self.STORAGE_ACCOUNT_SAS_TOKEN = env_sas_token
-        
-        if self.STORAGE_ACCOUNT_NAME is None or self.STORAGE_ACCOUNT_SHARE is None or self.STORAGE_ACCOUNT_SAS_TOKEN is None:
-            raise Exception("Environment variables necessary for running tests are not all set.")
+        if self.STORAGE_ACCOUNT_SAS_TOKEN is None:
+            raise Exception("STORAGE_ACCOUNT_SAS_TOKEN variable necessary for running tests not set.")
         
         # use the azure files sdk to verify before starting our tests the share is empty.
-        self.azure_fs = file.FileService(self.STORAGE_ACCOUNT_NAME, sas_token=self.STORAGE_ACCOUNT_SAS_TOKEN)
+        self.azure_fs = file.FileService(self.STORAGE_ACCOUNT_NAME, sas_token=self.STORAGE_ACCOUNT_SAS_TOKEN.lstrip('?'))
 
         self.delete_files_and_directories_from_share()
 
@@ -398,6 +403,12 @@ class Test_azfilesfuse(unittest.TestCase):
         self.fuse_driver.release('file.txt', None)
         cache_entry = self.fuse_driver.file_cache['file.txt']
         self.assertEqual(cache_entry.max_size, 0)
+
+    def test_strip_question_from_sas(self):
+        q_mark_sas = "?se=2017-07-16T20%3A42%3A33Z&sp=rwdl&sv=2016-05-31&sr=s&sig=C/N0tRE%AlLYaKeyD"
+        self.fuse_driver = azfilesfuse.AzureFiles(
+            self.STORAGE_ACCOUNT_NAME, self.STORAGE_ACCOUNT_SHARE, q_mark_sas)
+        self.assertEqual(self.fuse_driver._sas_token, q_mark_sas[1:], "question mark not stripped")
 
     #endregion Tests
 
