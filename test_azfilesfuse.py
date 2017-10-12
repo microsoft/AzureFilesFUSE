@@ -62,15 +62,20 @@ class Test_azfilesfuse(unittest.TestCase):
         env_name = os.environ.get("azfilesfuse_test_accountname", None)
         if env_name is not None:
             self.STORAGE_ACCOUNT_NAME = env_name
+        if self.STORAGE_ACCOUNT_NAME is None:
+            raise Exception("STORAGE_ACCOUNT_NAME variable necessary for running tests not set.")
+
         env_share = os.environ.get("azfilesfuse_test_accountshare", None)
         if env_share is not None:
             self.STORAGE_ACCOUNT_SHARE = env_share
+        if self.STORAGE_ACCOUNT_SHARE is None:
+            raise Exception("STORAGE_ACCOUNT_SHARE variable necessary for running tests not set.")
+
         env_sas_token = os.environ.get("azfilesfuse_test_accountsastoken", None)
         if env_sas_token is not None:
             self.STORAGE_ACCOUNT_SAS_TOKEN = env_sas_token
-        
-        if self.STORAGE_ACCOUNT_NAME is None or self.STORAGE_ACCOUNT_SHARE is None or self.STORAGE_ACCOUNT_SAS_TOKEN is None:
-            raise Exception("Environment variables necessary for running tests are not all set.")
+        if self.STORAGE_ACCOUNT_SAS_TOKEN is None:
+            raise Exception("STORAGE_ACCOUNT_SAS_TOKEN variable necessary for running tests not set.")
         
         # use the azure files sdk to verify before starting our tests the share is empty.
         self.azure_fs = file.FileService(self.STORAGE_ACCOUNT_NAME, sas_token=self.STORAGE_ACCOUNT_SAS_TOKEN.lstrip('?'))
