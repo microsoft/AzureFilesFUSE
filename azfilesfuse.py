@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 
 import concurrent.futures
 import contextlib
+from enum import Enum
 import errno
 import io
 import logging
@@ -53,7 +54,7 @@ if platform.system() is not 'Windows':
     syslog_handler.setFormatter(formatter)
     logger.addHandler(syslog_handler)
 
-class WriteInfo(object):
+class WriteInfo:
     '''Used to track writes to a file and coalesce them into a single write into
     Azure files.  We'll track the destination and whether or not the write has
     been processed.  We'll then combine sequential writes.'''
@@ -111,6 +112,12 @@ class FileCache:
         self.writes = deque()
         self.pending_writes = set()
 
+
+
+class ItemType(Enum):
+    File = "file"
+    Directory = "directory"
+
 class AzureFiles(LoggingMixIn, Operations):
 
     '''
@@ -138,13 +145,13 @@ class AzureFiles(LoggingMixIn, Operations):
     def _discover_item_type(self, item_path):
         try:
             self._files_service.get_directory_metadata(self._azure_file_share_name, item_path)
-            return 'directory'
+            return ItemType.Directory
         except AzureMissingResourceHttpError:
             try:
                 # if this fails, it is likely a file. Let's try for a file.
                 path_dir, path_file = self._get_separated_path(item_path)
                 self._files_service.get_file_metadata(self._azure_file_share_name, path_dir, path_file)
-                return 'file'
+                return ItemType.File
             except AzureMissingResourceHttpError:
                 # if that also fails, we must have a not found.
                 raise FuseOSError(errno.ENOENT)
@@ -384,20 +391,20 @@ class AzureFiles(LoggingMixIn, Operations):
         logger.debug('_rename - old:%s new:%s type:%s', old_location, new_location, item_type)
         old_location = old_location.strip('/')
         new_location = new_location.strip('/')
-        if item_type == 'directory':
+        if item_type == ItemType.Directory:
             self._files_service.create_directory(self._azure_file_share_name, new_location)
             # we need to recurse for each object in the directory
             for i in self._files_service.list_directories_and_files(self._azure_file_share_name, old_location):
                 old_path = os.path.join(old_location, i.name)
                 new_path = os.path.join(new_location, i.name)
                 if type(i) is file.models.File:
-                    self._rename(old_path, new_path, 'file')
+                    self._rename(old_path, new_path, ItemType.File)
                 elif type(i) is file.models.Directory:
-                    self._rename(old_path, new_path, 'directory')
+                    self._rename(old_path, new_path, ItemType.Directory)
                 else:
                     raise ValueError("item_type must be directory or file. unexpected type: {}".format(type(i)))
             self._files_service.delete_directory(self._azure_file_share_name, old_location)
-        elif item_type =='file':
+        elif item_type == ItemType.File:
             # rename this object.
             old_path_dir, old_path_file = self._get_separated_path(old_location)
             new_path_dir, new_path_file = self._get_separated_path(new_location)
