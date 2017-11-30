@@ -290,7 +290,7 @@ class AzureFiles(LoggingMixIn, Operations):
             except AzureHttpError as ahe:
                 if [i for i in ahe.args if 'InvalidRange' in i]:
                     logger.debug("read operation bad range. Offset provided must have been larger than file. path:%r size:%d offset:%d fh:%d exception:%s", path, size, offset, fh, ahe)
-                    return FuseOSError(errno.EINVAL)
+                    return  None # return nothing as we exceeded the file
                 else:
                     raise ahe
 
