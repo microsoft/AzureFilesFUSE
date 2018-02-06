@@ -35,8 +35,6 @@ from requests import Session
 
 executor = concurrent.futures.ThreadPoolExecutor(multiprocessing.cpu_count())
 
-_prior_write_failure = False;
-
 #import ptvsd
 #ptvsd.enable_attach(secret='my_secret')
 
@@ -101,8 +99,10 @@ class WriteInfo:
                 #logger.debug('updating %s range %d to %d', path, self.offset, self.offset+data_length-1)
                 self.files._files_service.update_range(self.files._azure_file_share_name, self.directory, self.filename, self.data, start_range=self.offset, end_range=self.offset+data_length-1)
 
+        except AzureHttpError as ahe:
+            self.files._prior_write_failure = True
+            raise
         except Exception as e:
-            _prior_write_failure = True
             logger.warning('error writing %s', str(e))
 
 class FileCache:
@@ -135,6 +135,8 @@ class AzureFiles(LoggingMixIn, Operations):
         self._sas_token = sas_token.lstrip("?")
         self._files_service = file.FileService(self._azure_storage_account_name, sas_token=self._sas_token, request_session=Session())
         
+        self._prior_write_failure = False
+
         self.writes = deque()
 
         self.dir_cache = {}
@@ -500,7 +502,7 @@ class AzureFiles(LoggingMixIn, Operations):
             # Take the write lock to see if we can coalesce
             with self.file_cache[orig_path].append_write_lock:
                 found = False
-                if self.file_cache[orig_path].writes and not _prior_write_failure:
+                if self.file_cache[orig_path].writes and not self._prior_write_failure:
                     last = self.file_cache[orig_path].writes[-1]
                     if (not last.processing and
                         (last.offset + len(last.data)) == offset and
@@ -515,16 +517,17 @@ class AzureFiles(LoggingMixIn, Operations):
 
                     # If we failed at some point (potentially in an async write) do this one immediately 
                     # to see if the remote FS is functional and not hide the failure from the OS.
-                    if _prior_write_failure:
-                        wi.write()
-                        _prior_write_failure = False
-                        return data_length
+                    if not self._prior_write_failure:
+                        future = executor.submit(wi.write)
+                        self.file_cache[orig_path].pending_writes.add(future)
+                        def done(future):
+                            self.file_cache[orig_path].pending_writes.remove(future)
+                        future.add_done_callback(done)
 
-                    future = executor.submit(wi.write)
-                    self.file_cache[orig_path].pending_writes.add(future)
-                    def done(future):
-                        self.file_cache[orig_path].pending_writes.remove(future)
-                    future.add_done_callback(done)
+            #Gotta do the "validation" write outside the append lock block.
+            if self._prior_write_failure:
+                wi.write()
+                self._prior_write_failure = False
           
             # TODO: if we ever try to cache attrs, we would have to update the st_mtime.
             return data_length

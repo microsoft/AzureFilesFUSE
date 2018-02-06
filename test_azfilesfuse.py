@@ -12,7 +12,6 @@ import azure.storage.file as file
 from azure.storage.file import models
 import os
 
-
 # USEFUL LINKS FOR THESE TESTS:
 #     ERRNO http://man7.org/linux/man-pages/man3/errno.3.html
 #     requests status codes:https://github.com/kennethreitz/requests/blob/5524472cc76ea00d64181505f1fbb7f93f11cc2b/requests/status_codes.py
@@ -55,7 +54,7 @@ with mock.patch.object(ctypes.util, 'find_library', side_effect=find_library_moc
 class Test_azfilesfuse(unittest.TestCase):
     STORAGE_ACCOUNT_NAME='crwilcoxmsftplayground'
     STORAGE_ACCOUNT_SHARE='fusetests'
-    STORAGE_ACCOUNT_SAS_TOKEN=None
+    STORAGE_ACCOUNT_SAS_TOKEN='None'
 
     def setUp(self):
         # TODO: Verify Settings provided
@@ -345,6 +344,34 @@ class Test_azfilesfuse(unittest.TestCase):
         # TODO: verify fails if file handle isn't open for write.  (RESPECT
         # ATTRIBUTES OF OPEN, CURRENTLY WE DON'T
     
+    # For this test, set "quota" to be the size of the quota you've created.
+    def test_quota(self):
+        quota = 1250000000
+
+        delta = int(quota / 5) # an arbitrary amount to go under and then over the quota threshold to test it.
+        size = quota - delta
+        contents = b'a' * size
+
+        self.azure_fs.create_file_from_bytes(
+            self.STORAGE_ACCOUNT_SHARE, '', 'file.txt', b'best file content')
+        fd = self.fuse_driver.open('file.txt', 'w')
+        self.fuse_driver.write('file.txt', b'a', size - 1, fd)
+        self.fuse_driver.flush('file.txt')
+
+        self.assertEqual(
+            len(self.azure_fs.get_file_to_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt').content), 
+            size)
+
+        self.fuse_driver.write('file.txt', b'b', size + delta * 2, fd)
+        time.sleep(1)
+        # We expect the second write to fail visibly once the first async write has exceeded quota and failed silently.
+        with self.assertRaisesRegex(Exception, '\[Errno 28\] No space left on device'):
+            self.fuse_driver.write('file.txt', b'b', size + delta * 2, fd)
+
+        self.assertEqual(
+            len(self.azure_fs.get_file_to_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt').content), 
+            size)
+
     def test_write_getattr_read(self):
         # Created after https://github.com/crwilcox/AzureFilesFUSE/issues/10
         self.fuse_driver.create('file.txt', None)
