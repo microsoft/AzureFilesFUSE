@@ -12,7 +12,6 @@ import azure.storage.file as file
 from azure.storage.file import models
 import os
 
-
 # USEFUL LINKS FOR THESE TESTS:
 #     ERRNO http://man7.org/linux/man-pages/man3/errno.3.html
 #     requests status codes:https://github.com/kennethreitz/requests/blob/5524472cc76ea00d64181505f1fbb7f93f11cc2b/requests/status_codes.py
@@ -76,7 +75,7 @@ class Test_azfilesfuse(unittest.TestCase):
             self.STORAGE_ACCOUNT_SAS_TOKEN = env_sas_token
         if self.STORAGE_ACCOUNT_SAS_TOKEN is None:
             raise Exception("STORAGE_ACCOUNT_SAS_TOKEN variable necessary for running tests not set.")
-        
+
         # use the azure files sdk to verify before starting our tests the share is empty.
         self.azure_fs = file.FileService(self.STORAGE_ACCOUNT_NAME, sas_token=self.STORAGE_ACCOUNT_SAS_TOKEN.lstrip('?'))
 
@@ -87,7 +86,7 @@ class Test_azfilesfuse(unittest.TestCase):
         # we also want to mock out things.  though we may do that per test.
         self.fuse_driver = azfilesfuse.AzureFiles(
             self.STORAGE_ACCOUNT_NAME, self.STORAGE_ACCOUNT_SHARE, self.STORAGE_ACCOUNT_SAS_TOKEN)
-    
+
     def delete_files_and_directories_from_share(self, dirpath=''):
         dirpath = dirpath.lstrip('/')
         for f in self.azure_fs.list_directories_and_files(self.STORAGE_ACCOUNT_SHARE, dirpath):
@@ -97,7 +96,7 @@ class Test_azfilesfuse(unittest.TestCase):
                     directory = os.path.dirname(path)
                     filename = os.path.basename(path)
                     self.azure_fs.delete_file(self.STORAGE_ACCOUNT_SHARE, directory, filename)
-                    
+
             if type(f) is models.Directory:
                 self.delete_files_and_directories_from_share(dirpath + "/" + f.name)
         if dirpath != '':
@@ -109,20 +108,20 @@ class Test_azfilesfuse(unittest.TestCase):
         self.assertEqual(
             self.fuse_driver.readdir('.', None),
             ['.', '..', 'file.txt'])
-        
+
         # TODO: failing but works fine under debugger
         #self.fuse_driver.create('file2.txt', 644)
         #self.assertEqual(
         #    self.fuse_driver.readdir('.', None),
         #    ['.', '..', 'file.txt', 'file2.txt'])
 
-    
+
     def test_getattr(self,):
         self.azure_fs.create_file_from_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt', b'test file content')
         self.azure_fs.create_directory(self.STORAGE_ACCOUNT_SHARE, 'dir')
         t = time.time()
-        
-        # {'st_ctime': 1504203454.0, 'st_gid': 123, 'st_mode': 33188, 
+
+        # {'st_ctime': 1504203454.0, 'st_gid': 123, 'st_mode': 33188,
         #  'st_mtime': 1504203454.0, 'st_nlink': 1, 'st_size': 17, 'st_uid': 123}
         file_attr = self.fuse_driver.getattr('file.txt')
         self.assertTrue(abs(file_attr['st_ctime']-t) < 5, "ctime:{} walltime:{}".format(file_attr['st_ctime'], t))
@@ -131,7 +130,7 @@ class Test_azfilesfuse(unittest.TestCase):
         del(file_attr['st_mtime'])
         self.assertDictEqual(file_attr, {'st_gid': 123, 'st_mode': 33188, 'st_nlink': 1, 'st_size': 17, 'st_uid': 123})
 
-        # {'st_ctime': 1504203454.0, 'st_gid': 123, 'st_mode': 16877, 
+        # {'st_ctime': 1504203454.0, 'st_gid': 123, 'st_mode': 16877,
         #  'st_mtime': 1504203454.0, 'st_nlink': 2, 'st_uid': 123}
         dir_attr = self.fuse_driver.getattr('dir')
         self.assertTrue(abs(dir_attr['st_ctime']-t) < 5, "ctime:{} walltime:{}".format(dir_attr['st_ctime'], t))
@@ -184,7 +183,7 @@ class Test_azfilesfuse(unittest.TestCase):
         # test too much length
         content = self.fuse_driver.read('file.txt', 100, 0, fd)
         self.assertEqual(content, b'test file content')
-        
+
         # test negative length
         #content = self.fuse_driver.read('file.txt', -1, 0, fd)
         #self.assertEqual(content, b'')
@@ -219,15 +218,15 @@ class Test_azfilesfuse(unittest.TestCase):
 
         # rename a file
         self.fuse_driver.rename('file.txt', 'file_renamed.txt')
-        
+
         # rename a dir
         self.fuse_driver.rename('dir/direxists', 'dir/dirrenamed')
-        
+
         # test renaming directory to a new root path
         # in non-mocked test, it would make sense to test with both an existent
         # and non existent root
         self.fuse_driver.rename('dir/direxists2', 'dirrenamed/newrootpath')
-        
+
         # TODO: test renaming file with conflict
         # with self.assertRaisesRegex(Exception, '\[Errno 17\] File exists'):
         #   self.fuse_driver.rename('file_renaming_exists.txt', 'file_exists2.txt')
@@ -278,7 +277,7 @@ class Test_azfilesfuse(unittest.TestCase):
 
         # test delete returns 200 (Okay)
         self.fuse_driver.unlink('file.txt')
-        
+
         # test delete returns 404 (File Not Found)
         with self.assertRaisesRegex(Exception, '\[Errno 2\] No such file or directory'):
             self.fuse_driver.unlink('notfound.txt')
@@ -290,28 +289,28 @@ class Test_azfilesfuse(unittest.TestCase):
         # verify writing 0 length
         self.fuse_driver.write('file.txt', b'', 0, fd)
         self.assertEqual(
-            self.azure_fs.get_file_to_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt').content, 
+            self.azure_fs.get_file_to_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt').content,
             b'best file content')
-            
+
         ## verify writing a bit
         self.fuse_driver.write('file.txt', b'v', 0, fd)
         self.fuse_driver.flush('file.txt')
         self.assertEqual(
-            self.azure_fs.get_file_to_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt').content, 
+            self.azure_fs.get_file_to_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt').content,
             b'vest file content')
-            
+
         # verify writing the buffer
         self.fuse_driver.write('file.txt', b'a' * 17, 0, fd)
         self.fuse_driver.flush('file.txt')
         self.assertEqual(
-            self.azure_fs.get_file_to_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt').content, 
+            self.azure_fs.get_file_to_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt').content,
             b'aaaaaaaaaaaaaaaaa')
-        
+
         # verify writing exceeding the buffer
         self.fuse_driver.write('file.txt', b'a' * 18, 0, fd)
         self.fuse_driver.flush('file.txt')
         self.assertEqual(
-            self.azure_fs.get_file_to_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt').content, 
+            self.azure_fs.get_file_to_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt').content,
             b'aaaaaaaaaaaaaaaaaa')
         ## TODO: AssertionError occurred Message=b'aaaaaaaaaaaaaaaaa\x00' != b'aaaaaaaaaaaaaaaaaa'
 
@@ -319,32 +318,60 @@ class Test_azfilesfuse(unittest.TestCase):
         with self.assertRaisesRegex(Exception, '\[Errno 22\] Invalid argument'):
             self.fuse_driver.write('file.txt', b'b', -1, fd)
         self.assertEqual(
-            self.azure_fs.get_file_to_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt').content, 
+            self.azure_fs.get_file_to_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt').content,
             b'aaaaaaaaaaaaaaaaaa')
 
         # verify writing to a offset beyond the file
         #with self.assertRaisesRegex(Exception, '\[Errno 22\] Invalid argument'):
         #    self.fuse_driver.write('file.txt', b'b', 19, fd)
         #self.assertEqual(
-        #    self.azure_fs.get_file_to_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt').content, 
+        #    self.azure_fs.get_file_to_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt').content,
         #    b'aaaaaaaaaaaaaaaaaa')
 
         #with self.assertRaisesRegex(Exception, '\[Errno 22\] Invalid argument'):
         #    self.fuse_driver.write('file.txt', b'c', 21, fd)
         #self.assertEqual(
-        #    self.azure_fs.get_file_to_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt').content, 
+        #    self.azure_fs.get_file_to_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt').content,
         #    b'aaaaaaaaaaaaaaaaaa')
 
         # verify offset equal to file length
         self.fuse_driver.write('file.txt', b'b', 18, fd)
         self.fuse_driver.flush('file.txt')
         self.assertEqual(
-            self.azure_fs.get_file_to_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt').content, 
+            self.azure_fs.get_file_to_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt').content,
             b'aaaaaaaaaaaaaaaaaab')
 
         # TODO: verify fails if file handle isn't open for write.  (RESPECT
         # ATTRIBUTES OF OPEN, CURRENTLY WE DON'T
-    
+
+    # For this test, "quota" is set to be the size of the quota you've created in bytes.
+    def test_quota(self):
+        quota = self.azure_fs.get_share_properties(self.STORAGE_ACCOUNT_SHARE).properties.quota * 1000000000
+
+        delta = int(quota / 5) # an arbitrary amount to go under and then over the quota threshold to test it.
+        size = quota - delta
+        contents = b'a' * size
+
+        self.azure_fs.create_file_from_bytes(
+            self.STORAGE_ACCOUNT_SHARE, '', 'file.txt', b'best file content')
+        fd = self.fuse_driver.open('file.txt', 'w')
+        self.fuse_driver.write('file.txt', b'a', size - 1, fd)
+        self.fuse_driver.flush('file.txt')
+
+        self.assertEqual(
+            len(self.azure_fs.get_file_to_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt').content),
+            size)
+
+        self.fuse_driver.write('file.txt', b'b', size + delta * 2, fd)
+        time.sleep(1)
+        # We expect the second write to fail visibly once the first async write has exceeded quota and failed silently.
+        with self.assertRaisesRegex(Exception, '\[Errno 28\] No space left on device'):
+            self.fuse_driver.write('file.txt', b'b', size + delta * 2, fd)
+
+        self.assertEqual(
+            len(self.azure_fs.get_file_to_bytes(self.STORAGE_ACCOUNT_SHARE, '', 'file.txt').content),
+            size)
+
     def test_write_getattr_read(self):
         # Created after https://github.com/crwilcox/AzureFilesFUSE/issues/10
         self.fuse_driver.create('file.txt', None)
