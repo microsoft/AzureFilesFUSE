@@ -57,3 +57,22 @@ sudo -H -u username python3 azfilesfuse.py 'crwilcoxteststorage' 'testshare' 'se
 
 ## Additional Notes
 I am currently using this on Ubuntu 16.04 LTS but it should work on many other Linux platforms. I will try to update the platforms section to reflect platforms I have heard work.
+
+## Running Tests
+This project contains some tests. Most of these steps will only have to be run once.
+
+1) Create new Azure Table Storage Account to use for testing. [How-to](https://docs.microsoft.com/en-us/azure/storage/common/storage-quickstart-create-account?tabs=portal)
+
+2) Create a file share in the Azure Table Storage Account you created. Configure this share to have a quota. A reasonable quota would be 100MB to 1GB. [How-to](https://docs.microsoft.com/en-us/azure/storage/files/storage-how-to-create-file-share#create-file-share-through-the-azure-portal)
+
+3) Create an account SAS token. Take special care to make this off of the account. Some of the tests use the quota property which isn't accessible from the share itself, but is available account-wide. You can restrict this to only have access to the file service.
+![Creating a SAS Token](README/Create_SAS_Token_Portal.png)
+
+4) Now that the necessary Azure components are created, some environment variables need to be set. 
+    - azfilesfuse_test_accountname is the name of the storage account (step 1)
+    - azfilesfuse_test_accountshare is the name of the file share (step 2)
+    - azfilesfuse_test_accountsastoken is the sas token created (step 3).
+
+5) Run the tests: `python -m unittest`
+
+
