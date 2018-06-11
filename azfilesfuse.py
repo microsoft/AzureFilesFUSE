@@ -98,6 +98,7 @@ class WriteInfo:
                 # update the range specified by this write.
                 #logger.debug('updating %s range %d to %d', path, self.offset, self.offset+data_length-1)
                 self.files._files_service.update_range(self.files._azure_file_share_name, self.directory, self.filename, self.data, start_range=self.offset, end_range=self.offset+data_length-1)
+                self.files.file_cache[self.orig_path].writes.remove(self)
 
         except AzureHttpError as ahe:
             self.files._prior_write_failure = True
@@ -112,7 +113,8 @@ class FileCache:
         self.write_lock = threading.Lock()
         self.append_write_lock = threading.Lock()
         self.max_size = 0
-        self.writes = deque()
+        self.last_write = None
+        self.writes = set()
         self.pending_writes = set()
 
 
@@ -137,9 +139,9 @@ class AzureFiles(LoggingMixIn, Operations):
         
         self._prior_write_failure = False
 
-        self.writes = deque()
-
         self.dir_cache = {}
+
+        self.id = 0
 
         self.file_cache = defaultdict(FileCache)
 
@@ -502,8 +504,8 @@ class AzureFiles(LoggingMixIn, Operations):
             # Take the write lock to see if we can coalesce
             with self.file_cache[orig_path].append_write_lock:
                 found = False
-                if self.file_cache[orig_path].writes and not self._prior_write_failure:
-                    last = self.file_cache[orig_path].writes[-1]
+                if self.file_cache[orig_path].last_write and not self._prior_write_failure:
+                    last = self.file_cache[orig_path].last_write
                     if (not last.processing and
                         (last.offset + len(last.data)) == offset and
                         len(last.data) + len(data) < file.FileService.MAX_RANGE_SIZE):
@@ -513,7 +515,8 @@ class AzureFiles(LoggingMixIn, Operations):
 
                 if not found:
                     wi = WriteInfo(self, directory, filename, offset, data, orig_path)
-                    self.file_cache[orig_path].writes.append(wi)
+                    self.file_cache[orig_path].last_write = wi
+                    self.file_cache[orig_path].writes.add(wi)
 
                     # If we failed at some point (potentially in an async write) do this one immediately 
                     # to see if the remote FS is functional and not hide the failure from the OS.
