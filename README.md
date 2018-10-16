@@ -22,7 +22,7 @@ sudo python3 azfilesfuse.py <azure_storage_account> <azure_file_share_name> <sas
 ### System Requirements
 The system needs Python 3.5 (or greater) and FUSE libraries to run. I expect to start using 3.6 syntax in the future so I suggest using 3.6 or greater, though it isn't strictly required at this time.
 
-NOTE: This is primarily tested agains Ubuntu 16.04 LTS. Other platforms should work with the below steps, but they are not verified frequently.
+NOTE: This is primarily tested against Ubuntu 16.04 LTS. Other platforms should work with the below steps, but they are not verified frequently.
 
 #### Ubuntu 16.04 LTS
 ```
