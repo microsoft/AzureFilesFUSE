@@ -3,5 +3,13 @@ python:
   - "3.6"
 # command to install dependencies
 install: "pip install -r requirements.txt"
+
+# env variables
+env:
+  global:
+    secure: "YOOIdQQRVv51a/1+qgWeaFvhxSIXy1VXIukU8WwAUX0y3/Pjou+bprmH3rSS1Uq1V+rxXlqd5KBwAuB080Efr60v3zhxmErJPbgHj1BQLyyMqhsiJwrdefGIwNP3Sowv2WNyp/pslF41mCAUQt/aF9HZBF9CeBkcwdxNO5wA9U7MGeZXzUgbK4TuVe/egCVn/hvS91MlB6PTT9oGaXcB6VWP2hItk4w+EfrREx5pozNU8Ib9duzW7Ke12WGqhOy53iUveVST+1tqQ3hCIv8N7enW0MXUAo5VEcqDeCkNeh/u5OGSWDaNFaD4wgsmJoB3Z3WBIghOuXzg/YxYlO05XBC1L/a6WZJrsRWzVdDsWR0+Yz7HntPq6YJAkr5blysYuEFgH7xMIFBXiqjOr0qQAAWPs0dJxWM0UNI2hLpLXvpxEa/62VExEAQpKEjIIPKbxHN6Fc8YdZdw3cCuwmhVKPvQEcxWYx8XfmasN2+HScc5Qx6xBH5cJaNR3vsl8NLCnGgEXl5ROyhAyRDXyZQ7cqslmBNL6z8QDBOLPbPs9ihYz8HuZCBm3sS3w9w3ZGu/HiBfq7M6XLtPXzs+A9ww+1BbKbVs/GdZ9Vo3rWkGSjj6AfwhKLIyFM02i229sdmrkwQ9gnOgvKkCSbtK79ana/0bHQLBbf2ofzcd5xxkOWc="
+
 # command to run tests
-script: pytest
+script:
+  - export MY_TEST_VAR=$MY_TEST_VAR
+  - pytest
