@@ -52,7 +52,7 @@ with mock.patch.object(ctypes.util, 'find_library', side_effect=find_library_moc
 
 
 class Test_azfilesfuse(unittest.TestCase):
-    STORAGE_ACCOUNT_NAME='crwilcoxmsftplayground'
+    STORAGE_ACCOUNT_NAME='fusetests'
     STORAGE_ACCOUNT_SHARE='fusetests'
     STORAGE_ACCOUNT_SAS_TOKEN=None
 
@@ -60,15 +60,23 @@ class Test_azfilesfuse(unittest.TestCase):
         # TODO: Verify Settings provided
         env_name = os.environ.get("azfilesfuse_test_accountname", None)
         if env_name is not None:
+            print("got env_name " + str(env_name))
             self.STORAGE_ACCOUNT_NAME = env_name
         if self.STORAGE_ACCOUNT_NAME is None:
             raise Exception("STORAGE_ACCOUNT_NAME variable necessary for running tests not set.")
 
         env_share = os.environ.get("azfilesfuse_test_accountshare", None)
         if env_share is not None:
+            print("got env_share " + str(env_share))
             self.STORAGE_ACCOUNT_SHARE = env_share
         if self.STORAGE_ACCOUNT_SHARE is None:
             raise Exception("STORAGE_ACCOUNT_SHARE variable necessary for running tests not set.")
+        
+        env_test = os.environ.get("azfilesfuse_test_accountshare", None)
+        if env_test is not None:
+            print("env_test is " + str(env_test))
+        else
+            print("no env_test value")
 
         env_sas_token = os.environ.get("azfilesfuse_test_accountsastoken", None)
         if env_sas_token is not None:
