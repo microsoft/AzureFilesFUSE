@@ -72,11 +72,9 @@ class Test_azfilesfuse(unittest.TestCase):
         if self.STORAGE_ACCOUNT_SHARE is None:
             raise Exception("STORAGE_ACCOUNT_SHARE variable necessary for running tests not set.")
         
-        env_test = os.environ.get("azfilesfuse_test_accountshare", None)
+        env_test = os.environ.get("azfilesfuse_test", None)
         if env_test is not None:
             print("env_test is " + str(env_test))
-        else
-            print("no env_test value")
 
         env_sas_token = os.environ.get("azfilesfuse_test_accountsastoken", None)
         if env_sas_token is not None:
