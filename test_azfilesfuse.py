@@ -52,30 +52,12 @@ with mock.patch.object(ctypes.util, 'find_library', side_effect=find_library_moc
 
 
 class Test_azfilesfuse(unittest.TestCase):
-    STORAGE_ACCOUNT_NAME='notanaccount'
+    STORAGE_ACCOUNT_NAME='fusetests'
     STORAGE_ACCOUNT_SHARE='fusetests'
     STORAGE_ACCOUNT_SAS_TOKEN=None
 
     def setUp(self):
-        # TODO: Verify Settings provided
-        env_name = os.environ.get("azfilesfuse_test_accountname", None)
-        if env_name is not None:
-            print("got env_name " + str(env_name))
-            self.STORAGE_ACCOUNT_NAME = env_name
-        if self.STORAGE_ACCOUNT_NAME is None:
-            raise Exception("STORAGE_ACCOUNT_NAME variable necessary for running tests not set.")
-
-        env_share = os.environ.get("azfilesfuse_test_accountshare", None)
-        if env_share is not None:
-            print("got env_share " + str(env_share))
-            self.STORAGE_ACCOUNT_SHARE = env_share
-        if self.STORAGE_ACCOUNT_SHARE is None:
-            raise Exception("STORAGE_ACCOUNT_SHARE variable necessary for running tests not set.")
-        
-        env_test = os.environ["MY_TEST_VAR"]
-        raise Exception("env_test variable is " + str(env_test))
-
-        env_sas_token = os.environ.get("azfilesfuse_test_accountsastoken", None)
+        env_sas_token = os.environ["SAS_TOKEN"]
         if env_sas_token is not None:
             self.STORAGE_ACCOUNT_SAS_TOKEN = env_sas_token
         if self.STORAGE_ACCOUNT_SAS_TOKEN is None:
