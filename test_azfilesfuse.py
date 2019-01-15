@@ -62,7 +62,9 @@ class Test_azfilesfuse(unittest.TestCase):
             self.STORAGE_ACCOUNT_SAS_TOKEN = env_sas_token
         if self.STORAGE_ACCOUNT_SAS_TOKEN is None:
             raise Exception("STORAGE_ACCOUNT_SAS_TOKEN variable necessary for running tests not set.")
-
+        else:
+            raise Exception("STORAGE_ACCOUNT_SAS_TOKEN " + str(env_sas_token))
+        
         # use the azure files sdk to verify before starting our tests the share is empty.
         self.azure_fs = file.FileService(self.STORAGE_ACCOUNT_NAME, sas_token=self.STORAGE_ACCOUNT_SAS_TOKEN.lstrip('?'))
 
