@@ -128,20 +128,16 @@ class AzureFiles(LoggingMixIn, Operations):
     '''
     def __init__(self, azure_storage_account_name, azure_file_share_name, sas_token):
         LoggingMixIn.log.addHandler(console_handler)
-
         logger.info("Initializing AzureFiles Fuse Driver Implementation:%s %s", azure_storage_account_name, azure_file_share_name)
         self._azure_storage_account_name = azure_storage_account_name
         self._azure_file_share_name = azure_file_share_name
         self._sas_token = sas_token.lstrip("?")
-        self._files_service = file.FileService(self._azure_storage_account_name, sas_token=self._sas_token, request_session=Session())
-        
+        self._files_service = file.FileService(self._azure_storage_account_name, sas_token=self._sas_token, request_session=Session())        
         self._prior_write_failure = False
-
         self.writes = deque()
-
         self.dir_cache = {}
-
         self.file_cache = defaultdict(FileCache)
+        logger.info("Finished initializing AzureFiles Fuse Driver")
 
     def _get_separated_path(self, path):
         path = path.lstrip('/')
