@@ -207,7 +207,7 @@ class AzureFiles(LoggingMixIn, Operations):
 
 
             if path == '':
-                st['st_mode'] = stat.S_IFDIR | 0o755
+                st['st_mode'] = stat.S_IFDIR | 0o770
                 st['st_nlink'] = 2
                 return st
             
@@ -218,12 +218,12 @@ class AzureFiles(LoggingMixIn, Operations):
                 raise FuseOSError(ENOENT)
 
             if isinstance(item, models.Directory):
-                st['st_mode'] = stat.S_IFDIR | 0o755
+                st['st_mode'] = stat.S_IFDIR | 0o770
                 st['st_nlink'] = 2
                 properties = self._files_service.get_directory_properties(
                     self._azure_file_share_name, path).properties
             else:
-                st['st_mode'] = stat.S_IFREG | 0o644
+                st['st_mode'] = stat.S_IFREG | 0o770
                 st['st_nlink'] = 1
                 st['st_size'] = item.properties.content_length
                 properties = self._files_service.get_file_properties(
