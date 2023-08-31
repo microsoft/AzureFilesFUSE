@@ -48,7 +48,7 @@ logger = logging.getLogger("AzureFiles_FuseDriver")
 logger.setLevel(LOGGING_LEVEL)
 logger.addHandler(console_handler)
 
-if platform.system() is not 'Windows':
+if platform.system() not in ['Windows', 'Darwin']:
     syslog_handler = logging.handlers.SysLogHandler(address = '/dev/log')
     formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
     syslog_handler.setFormatter(formatter)
